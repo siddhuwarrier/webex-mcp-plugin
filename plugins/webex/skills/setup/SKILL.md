@@ -229,18 +229,76 @@ Read the file back and show the user what it contains, so a silent write failure
 
 If the user declined a disclaimer, write nothing — an absent file means no disclaimer.
 
-### Step 7: Sign in, then verify
+### Step 7: Sign in
 
-Tell the user to run `/mcp`, choose **webex-messaging**, and complete the browser sign-in.
+Only one part of this genuinely needs the user — clicking through the Webex consent screen. Drive everything else
+yourself rather than handing over a list of instructions.
 
-Before they click through, it is worth checking the authorization URL matches what was set up — `redirect_uri` should
-carry the port from Step 4, and `scope` should list what Step 2 selected and nothing more.
+**First, look for the server's auth tool.** A registered server that needs authentication exposes
+`mcp__webex-messaging__authenticate` and `mcp__webex-messaging__complete_authentication`. Search your available tools
+for a name ending in `__authenticate` for this server.
 
-Then verify with a read-only call rather than declaring success:
+#### If the auth tool is there
+
+1. **Call `authenticate`.** It returns the authorization URL with the correct PKCE challenge and state already in it.
+   Never hand-build this URL, and never use the sample URL from the Webex developer site — that one has a placeholder
+   `state` and no `code_challenge`, so the local listener rejects the callback.
+2. **Check the URL before the user ever sees it**, and say what you checked:
+   - `redirect_uri` must be `http://127.0.0.1:<PORT>/callback` with the port from Step 4. Note it uses `127.0.0.1`,
+     so that exact spelling must be on the Integration.
+   - `scope` must match the Step 2 string, with nothing extra.
+
+   If either is wrong, **stop and fix it** rather than letting the user walk into the error. A port mismatch means
+   adding that redirect URI to the Integration; extra scopes mean re-running Step 6 with the right pinned set.
+3. **Open it for them.** Offer to launch the browser and do it on confirmation: `open <url>` on macOS,
+   `xdg-open <url>` on Linux, `start "" "<url>"` on Windows.
+4. **Copy it to the clipboard as well** — `pbcopy`, `clip.exe`, or `xclip -selection clipboard` — and print it as one
+   unwrapped line. These URLs are long, and terminal multiplexers insert wrapping characters that silently corrupt a
+   hand-made selection.
+5. **Wait, then confirm** the `webex-*` tools have appeared. If the redirect page errors, ask for the full
+   address-bar URL and pass it to `complete_authentication`.
+
+#### If the auth tool is missing
+
+The registration landed after this session started, so the session cannot see it. **This is the step users miss**, so
+make it the only thing in your message — no preamble, no recap of what came before — and give the exact commands for
+their environment rather than telling them to "restart".
+
+You cannot do this yourself: restarting and slash commands both belong to the user.
+
+> **The Webex server is registered, but this session can't see it yet — it needs a restart.**
+>
+> **Terminal:** type `/exit` (or press Ctrl-D), then run this in the same directory to come back to this
+> conversation:
+>
+> ```bash
+> claude --continue
+> ```
+>
+> **VS Code / JetBrains:** open the command palette — <kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> on macOS,
+> <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> elsewhere — and run **Developer: Reload Window**. Then reopen Claude
+> and pick this conversation from the history.
+>
+> **Claude Desktop:** quit the app fully (<kbd>Cmd</kbd>+<kbd>Q</kbd> on macOS) and reopen it.
+>
+> Then run `/webex:setup` again. It will detect what is already done and resume at the sign-in.
+
+Tell them `claude --continue` reopens this conversation rather than starting a fresh one, because the usual worry
+about restarting is losing the thread.
+
+Do not offer `/reload-plugins` as a shortcut. It reloads MCP servers that a *plugin* provides, and this server was
+registered into the user's own configuration, so it may not be covered. Restarting is the reliable action.
+
+### Step 8: Verify
+
+Do not treat a completed sign-in as success. Make a read-only call:
 
 > List my 3 most recently active Webex group spaces.
 
-Live data back means it works. If they granted read-only access, do not test by posting.
+Live data back means it works. If the user granted read-only access, do not test by posting.
+
+Then say where the settings live: re-run `/webex:setup` to change capabilities or the port, and edit
+`~/.claude/webex-mcp/disclaimer.txt` to change or remove the disclaimer.
 
 ---
 
@@ -249,12 +307,14 @@ Live data back means it works. If they granted read-only access, do not test by 
 Setup gets interrupted. Before starting over, work out what is already done and continue from the first incomplete
 step. If you have a shell:
 
-1. `claude mcp list` — is a `webex-messaging` server listed? Absent means Step 6 has not run. `Needs authentication` means it
-   is registered and only the browser sign-in is outstanding (Step 7).
+1. `claude mcp list` — is a `webex-messaging` server listed? Absent means Step 6 has not run. `Needs authentication`
+   means it is registered and only the browser sign-in is outstanding (Step 7). If it is listed there but its
+   `__authenticate` tool is not among your available tools, the session predates the registration — go to the restart
+   instructions in Step 7.
 2. `claude mcp get webex-messaging` — check the registered `clientId`, `callbackPort` and `scopes` against what the user wants.
    A port or scope change means re-running Step 6, not editing the file by hand.
 3. Are `webex-*` tools already in your tool list? Then registration and sign-in both succeeded — go straight to the
-   Step 7 verification call, or to **Troubleshooting** if one specific tool is failing.
+   Step 8 verification call, or to **Troubleshooting** if one specific tool is failing.
 
 Tell the user what you found rather than silently resuming — "Looks like the plugin is configured and just needs the
 browser sign-in, want me to pick up there?" — and continue from that point instead of redoing finished work.

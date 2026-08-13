@@ -1,0 +1,2 @@
+# Local, per-developer Claude Code settings (permissions, enabled plugins)
+.claude/settings.local.json

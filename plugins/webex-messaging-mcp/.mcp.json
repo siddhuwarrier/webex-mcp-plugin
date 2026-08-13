@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "webex": {
+      "type": "http",
+      "url": "https://mcp.webexapis.com/mcp/webex-messaging",
+      "oauth": {
+        "clientId": "${user_config.webex_client_id}",
+        "callbackPort": "${user_config.webex_callback_port}",
+        "scopes": "${user_config.webex_scopes}"
+      }
+    }
+  }
+}

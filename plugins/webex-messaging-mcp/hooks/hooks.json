@@ -1,0 +1,18 @@
+{
+  "description": "Guards against three Webex Messaging MCP calls that succeed but produce the wrong outcome: HTML-escaped mentions that notify nobody, thread replies sent through webex-create-message, and unbounded space searches. Runs via node in exec form so it behaves the same on Windows, macOS and Linux.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "mcp__.*webex.*__webex-(create-message|create-thread-reply|edit-message|search-spaces)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/webex-guard.js"],
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

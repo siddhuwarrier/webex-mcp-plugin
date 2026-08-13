@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "webex-messaging-mcp",
+  "displayName": "Webex Messaging",
+  "description": "Read, search, and post Webex messages from your editor via Cisco's hosted Webex Messaging MCP server.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Cisco DevNet",
+    "url": "https://developer.webex.com"
+  },
+  "homepage": "https://developer.webex.com/mcp/docs/messaging-mcp-server",
+  "repository": "https://github.com/CiscoDevNet/webex-mcp-official",
+  "license": "Apache-2.0",
+  "keywords": ["webex", "cisco", "messaging", "mcp", "collaboration"],
+  "userConfig": {
+    "webex_client_id": {
+      "type": "string",
+      "title": "Webex Integration Client ID",
+      "description": "From developer.webex.com/my-apps → your Integration → Client ID.",
+      "required": true
+    },
+    "webex_callback_port": {
+      "type": "number",
+      "title": "OAuth callback port",
+      "description": "Local port Claude Code listens on during sign-in. Must match the Redirect URI you registered: http://127.0.0.1:<port>/callback. Change it only if 35621 is already in use on your machine.",
+      "default": 35621,
+      "min": 1024,
+      "max": 65535
+    },
+    "webex_scopes": {
+      "type": "string",
+      "title": "Webex scopes to request",
+      "description": "Space-separated, and must be a subset of the scopes on your Integration or sign-in fails with invalid_scope. Rather than editing this by hand, run the webex-mcp-setup skill and pick the capabilities you need from a checklist — it writes this field for you.",
+      "default": "spark:mcp spark:messages_read spark:messages_write spark:rooms_read"
+    },
+    "webex_disclaimer": {
+      "type": "string",
+      "title": "AI disclaimer appended to outgoing messages",
+      "description": "Added in italics on its own line at the end of every message this server posts. Leave empty to disable. Only applies if you granted a message-write scope.",
+      "default": "This message was generated using AI and posted using the Webex MCP server. Apologies in advance for any errors or omissions"
+    }
+  },
+  "mcpServers": "./.mcp.json"
+}

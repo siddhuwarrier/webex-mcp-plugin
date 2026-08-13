@@ -14,6 +14,96 @@ Webex provides MCP servers that enable AI agents to securely access various Webe
 - [Meetings MCP Server](#meetings-mcp-server) — https://developer.webex.com/mcp/docs/meetings-mcp-server
 - [Messaging MCP Server](#messaging-mcp-server) — https://developer.webex.com/mcp/docs/messaging-mcp-server
 - [Vidcast MCP Server](#vidcast-mcp-server) — https://developer.webex.com/mcp/docs/vidcast-mcp-server
+- [Agent plugin](#agent-plugin)
+
+---
+
+## Agent plugin
+
+This repository publishes a plugin for the **Messaging** MCP server, so you can connect without hand-editing any
+configuration. It installs **directly from this repository** — it does not depend on being listed in any curated
+plugin directory.
+
+### Claude Code
+
+Add this repository as a marketplace, then install from it:
+
+```
+/plugin marketplace add CiscoDevNet/webex-mcp-official
+/plugin install webex-messaging-mcp@webex-mcp-official
+```
+
+Then ask your agent to *set up Webex* and the bundled wizard takes over.
+
+### Codex
+
+```bash
+codex plugin marketplace add CiscoDevNet/webex-mcp-official
+```
+
+Then open `/plugins` in the Codex CLI, select **Webex Messaging**, and install it.
+
+> **On Codex you connect the server yourself.** The Codex plugin manifest has no equivalent of Claude Code's
+> `userConfig`, and its `.mcp.json` accepts only `url` and `oauth_resource` — there is no field for an OAuth client
+> ID, callback port or scope pinning. Since the Webex server requires a client ID, Codex cannot connect it from the
+> manifest alone, so the plugin ships no MCP server there. Slack's official plugin ships the same way for the same
+> reason. You still get the setup wizard, the troubleshooting, and the correctness guard; the AI disclaimer is
+> Claude Code only, because it depends on `userConfig`.
+
+### What the Claude Code plugin configures for you
+
+| | |
+|---|---|
+| Server URL | `https://mcp.webexapis.com/mcp/webex-messaging` |
+| Callback port | Defaults to `35621` and is checked as bindable before you commit to it |
+| Scopes | Defaults to `spark:mcp spark:messages_read spark:messages_write spark:rooms_read`; the wizard offers all 9 as a checklist |
+| AI disclaimer | Appended in italics to every outgoing message; editable or removable |
+
+### Guided setup
+
+Ask your agent to *set up Webex*, and the `webex-mcp-setup` wizard will:
+
+1. Offer the **9 scopes as a checklist**, grouped by capability, so you grant only what you need
+2. Offer an **AI disclaimer** for outgoing messages if you granted write access, defaulting to on
+3. **Test that the callback port can actually be bound** — on Windows, macOS or Linux — and pick another if not
+4. Hand you the exact **Redirect URI and scope list** to paste into your Webex Integration
+5. Write the configuration, then verify with a read-only call
+
+The same skill doubles as the troubleshooter for `invalid_scope`, redirect failures and 403s.
+
+### Doing it by hand
+
+1. **Control Hub**: a Webex administrator must enable the MCP server for your organization.
+2. **Create an Integration** at [developer.webex.com/my-apps](https://developer.webex.com/my-apps) with:
+   - Redirect URI `http://127.0.0.1:35621/callback` — note **`127.0.0.1`, not `localhost`**, because Webex
+     matches redirect URIs as exact strings
+   - The scopes you want, which must include `spark:mcp`
+
+Then run `/mcp`, choose **webex**, and complete the browser sign-in.
+
+### Notes
+
+The default scope set deliberately excludes space deletion, membership changes, and webhook management. All 24
+tools are still exposed by the server, so the ones needing an omitted scope return **403** — that is the narrow
+grant working as intended. The bundled `webex-mcp-setup` skill covers widening scopes and the common sign-in
+failures.
+
+The plugin also installs a `PreToolUse` guard that catches three calls which succeed while producing the wrong
+outcome. It runs in the harness, so it costs nothing in context:
+
+| Caught | Why it matters |
+|---|---|
+| An HTML-escaped mention, `&lt;@personId:…&gt;` | Webex renders it as literal text and notifies nobody, while returning 200 |
+| `webex-create-message` called with a `parentId` | That field is ignored, so the reply posts as a new top-level message and fragments the thread |
+| `webex-search-spaces` with no `max` | Paginates every space in the organization; on a large org it looks like a hang. A bound of 20 is injected |
+
+The first two are refused with an explanation of the fix; the third is corrected silently.
+
+The guard is a dependency-free Node script, so it behaves the same on Windows, macOS and Linux. It **fails open**:
+if `node` is not on your `PATH`, the hook exits without a decision and the call proceeds. Node is therefore a
+prerequisite for the guard working, never for the plugin working.
+
+Authentication is OAuth as *you*, not as a bot: there is no token to store and nothing to self-host.
 
 ---
 

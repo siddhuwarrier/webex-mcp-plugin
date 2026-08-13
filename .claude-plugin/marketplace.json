@@ -1,0 +1,19 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "webex-mcp-official",
+  "description": "Cisco Webex plugins for AI coding agents, built on the official hosted Webex MCP servers",
+  "owner": {
+    "name": "Cisco DevNet",
+    "url": "https://developer.webex.com"
+  },
+  "plugins": [
+    {
+      "name": "webex-messaging-mcp",
+      "source": "./plugins/webex-messaging-mcp",
+      "displayName": "Webex Messaging",
+      "description": "Read, search, and post Webex messages from your editor via Cisco's hosted Webex Messaging MCP server.",
+      "category": "productivity",
+      "tags": ["webex", "cisco", "messaging", "mcp", "collaboration"]
+    }
+  ]
+}

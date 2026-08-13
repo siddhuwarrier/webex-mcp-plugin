@@ -180,7 +180,9 @@ silent failure.
 exchange without `client_secret`, even though the flow uses PKCE. Say plainly that this is a real secret, unlike the
 client ID. Do not paste it into the conversation — Step 6 collects it through a masked prompt.
 
-Wait for the Client ID. It is not a secret, but do not write it to a file.
+Wait for both values. The **client ID is not sensitive**, so it is fine in the conversation. The **client secret is**,
+so ask them to hold it until Step 6 prompts for it — do not have them paste it here, and do not write either to a
+file.
 
 ### Step 6: Register the server
 
@@ -354,8 +356,9 @@ step. If you have a shell:
    `Needs authentication` regardless of the live session's state. Do not read authentication status out of either.
 3. `claude mcp get webex-messaging` is still useful for reading back the *configuration* — `clientId`, `callbackPort`,
    `scopes` — just not the auth state. A port or scope change means re-running Step 6, not editing the file by hand.
-3. Are `webex-*` tools already in your tool list? Then registration and sign-in both succeeded — go straight to the
-   Step 8 verification call, or to **Troubleshooting** if one specific tool is failing.
+
+If the tools are present, registration and sign-in both succeeded — go straight to the Step 8 verification call, or to
+**Troubleshooting** if one specific tool is failing.
 
 Tell the user what you found rather than silently resuming — "Looks like the plugin is configured and just needs the
 browser sign-in, want me to pick up there?" — and continue from that point instead of redoing finished work.

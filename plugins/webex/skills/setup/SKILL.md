@@ -18,7 +18,7 @@ You help a user connect their editor to Cisco's **hosted** Webex MCP servers fro
 to end. Nothing is self-hosted, and the connection acts as the user over OAuth 2.0 rather than as a bot — but it does
 need the client ID **and client secret** of a Webex Integration they own.
 
-Three servers exist — Messaging, Meetings and Vidcast. **This skill currently covers Messaging.**
+It covers the **Messaging** and **Meetings** servers, together or separately, in a single pass.
 
 Two settings must agree between the user's Webex Integration and this plugin — the **callback port** and the
 **scopes**. Each mismatch produces an error that does not name its cause, which is what this wizard exists to
@@ -66,39 +66,39 @@ Something like:
 > developer.webex.com.
 
 Do not list prerequisites, do not preview the steps, and do not ask permission to begin. Go straight into Step 1. If
-their organization has not enabled MCP access, Step 8 surfaces it; saying so now is a warning about a failure that
-probably will not happen.
+their organization has not enabled MCP access, the Step 7 verification call surfaces it; saying so now is a warning
+about a failure that probably will not happen.
 
 ### Step 1: Which Webex servers?
 
-Webex exposes three separate hosted MCP servers. They are genuinely separate: different endpoints, and scope sets
-that share only `spark:mcp`. Each needs its own registration and its own browser sign-in.
+Ask which they want as a **multi-select checklist**, preselecting *Messaging*:
 
-Explain that, then ask which they want as a **multi-select checklist**, preselecting *Messaging*:
+| Option label | Description to show | Endpoint | Server name to register |
+| --- | --- | --- | --- |
+| `Messaging` | Read, search and post messages, spaces and threads. | `https://mcp.webexapis.com/mcp/webex-messaging` | `webex-messaging` |
+| `Meetings` | Schedule meetings, and read transcripts, recordings and AI summaries. | `https://mcp.webexapis.com/mcp/webex-meeting` | `webex-meeting` |
 
-| Option label | Description to show | Endpoint |
-| --- | --- | --- |
-| `Messaging` | Read, search and post messages, spaces and threads. | `https://mcp.webexapis.com/mcp/webex-messaging` |
-| `Meetings` | Schedule and list meetings, and read recordings, transcripts and summaries. | `https://mcp.webexapis.com/mcp/webex-meeting` |
-| `Vidcast` | Video posts and their transcripts. | `https://mcp.webexapis.com/mcp/vidcast` |
+Both can be set up in one pass, and the steps below are ordered so that happens: **every decision is collected first,
+then one visit to the Webex site, then one restart, then a sign-in per server.** Do not loop through the whole flow
+once per server — that would send the user to Webex twice and restart twice.
 
-**Only Messaging is supported by this wizard today.** If the user picks Meetings or Vidcast, say so plainly rather
-than pretending — point them at the scope tables in the repository README and offer to register the server for them
-with the full scope string documented there, using the same Integration, port and `add-json` command shape as the
-Messaging path. Do not invent capability checklists for servers this skill has not been extended to cover.
+Carry forward a per-server scope list, and a **union** of those lists for the Integration in Step 5.
 
-The good news to tell them: **one Webex Integration serves all three.** Scopes are additive on the app registration,
-so the Integration created in this run can hold the scopes for servers they add later, reusing the same client ID,
-redirect URI and port. Only the registration and sign-in are per-server.
-
-The remaining steps assume Messaging. Run them once per selected server if that changes.
+Vidcast also exists (`https://mcp.webexapis.com/mcp/vidcast`) but is deliberately not offered: it requires
+`Identity:Organization` and `Identity:Config`, which is organization-level identity access for a read-only video tool,
+and its three scopes cannot be narrowed. If the user asks for it by name, say that and let them decide.
 
 ### Step 2: Which capabilities?
 
-Explain that Webex grants access per capability, that the choice can be widened later, and that anything not granted
-returns a 403 rather than failing silently.
+Ask once per server chosen in Step 1 — Messaging first, then Meetings — as separate questions in separate turns. Do
+not merge them into one list; the scope sets are unrelated and the options would not make sense together.
 
-Then offer these **four options as a multi-select checklist**, preselecting *Read and post messages*:
+Say once, not per server, that anything not granted returns a 403 rather than failing silently, and that it can be
+widened later.
+
+#### Messaging
+
+Offer these **four options as a multi-select checklist**, preselecting *Read and post messages*:
 
 | Option label | Description to show | Scopes it contributes |
 | --- | --- | --- |
@@ -113,8 +113,43 @@ reachable callback URL and is not useful from an editor. Add it only if the user
 If the user picks both `Read and post messages` and `Read messages only`, treat read-only as the narrower intent and
 confirm which they meant.
 
-Build one space-separated scope string from the selections, always starting with `spark:mcp`, which the server
-requires. Show the user the final string and say it is what will be requested at sign-in.
+#### Meetings
+
+Offer these **three options as a multi-select checklist**, preselecting *Read meetings and transcripts*:
+
+| Option label | Description to show | Scopes granted |
+| --- | --- | --- |
+| `Read meetings and transcripts` | List and search meetings, see details and live participants, and read transcripts and recordings. | `meeting:schedules_read` `meeting:participants_read` `meeting:transcripts_read` `meeting:recordings_read` |
+| `AI summaries and action items` | Read AI-generated summary notes and action items for ended meetings. | `meeting:summaries_read` |
+| `Create, change and cancel meetings` | Schedule, reschedule and cancel meetings, and manage invitees. | `meeting:schedules_write` |
+
+Two things to say, briefly:
+
+- **`Create, change and cancel meetings` sends real email** to real invitees, and cancelling emails them too. It is
+  the most consequential grant in this wizard — more so than anything in Messaging, where a wrong message can at least
+  be deleted.
+- **`AI summaries and action items` needs Webex AI Assistant** enabled for the organization. The tool exists either
+  way and fails without it, so a 403 there is an entitlement problem, not a scope one.
+
+#### Then
+
+Assemble the scopes, keeping two forms:
+
+- **For the user:** a **bullet list, one scope per line**, grouped under the server it belongs to. A space-separated
+  run of `spark:` and `meeting:` strings is unreadable, and this is the list they have to tick on the Webex site, so it
+  needs to be scannable.
+- **For the configuration:** a space-separated string per server, each starting with `spark:mcp`, which both servers
+  require. That is the format `oauth.scopes` takes in Step 6. Never show the user this form.
+
+Also keep the union across servers — Step 5 needs it, as bullets.
+
+Show the per-server bullet lists once, and say this is what will be requested at sign-in. For example:
+
+> **Messaging**
+> - `spark:mcp`
+> - `spark:messages_read`
+> - `spark:messages_write`
+> - `spark:rooms_read`
 
 ### Step 3: AI disclaimer?
 
@@ -180,12 +215,17 @@ below 1024 need administrator rights and will not work.
 This step cannot be automated — it needs a human signed in to Webex. Give them the values already filled in, with
 nothing left to work out:
 
+**One Integration covers every server chosen**, so this happens once no matter how many were selected. Give them the
+union of the scopes from Step 2, as a bullet list they can tick down.
+
 > Go to **[developer.webex.com/my-apps](https://developer.webex.com/my-apps) → Create a New App → Integration**
 >
 > - **Redirect URIs:** add **both**
 >   - `http://localhost:<PORT>/callback`
 >   - `http://127.0.0.1:<PORT>/callback`
-> - **Scopes:** tick exactly these — `<THE SCOPE LIST FROM STEP 2>`
+> - **Scopes:** tick exactly these
+>   - `spark:mcp`
+>   - `<one scope per line, the union from Step 2>`
 >
 > Then copy **both** the **Client ID** and the **Client Secret**, and paste them back here.
 
@@ -205,13 +245,12 @@ Wait for both values. The **client ID is not sensitive**, so it is fine in the c
 so ask them to hold it until Step 6 prompts for it — do not have them paste it here, and do not write either to a
 file.
 
-### Step 6: Register the server
+### Step 6: Register the servers
 
-This plugin does not define the MCP server itself, so nothing is configured until this step runs. Register it with
-the values gathered above — one command, and because it is a fresh registration the pinned scopes take effect
-immediately with no restart.
+This plugin does not define the MCP servers itself, so nothing is configured until this step runs. **Register every
+server chosen in Step 1 now, back to back**, so the single restart in Step 7 picks them all up.
 
-**If you have a shell**, confirm with the user, then run:
+One command per server. The client ID, secret and port are shared; only the endpoint and scopes differ.
 
 ```bash
 claude mcp add-json webex-messaging '{
@@ -220,19 +259,29 @@ claude mcp add-json webex-messaging '{
   "oauth": {
     "clientId": "<CLIENT_ID>",
     "callbackPort": <PORT>,
-    "scopes": "<SCOPE STRING>"
+    "scopes": "<MESSAGING SCOPE STRING>"
   }
-}' --scope user
+}' --scope user --client-secret
 ```
-
-`callbackPort` is a **number**, unquoted. `scopes` is a single space-separated string.
-
-**Add `--client-secret` to that command.** It prompts for the secret with masked input, so the value never reaches the
-transcript or the shell history:
 
 ```bash
-claude mcp add-json webex-messaging '{ ... as above ... }' --scope user --client-secret
+claude mcp add-json webex-meeting '{
+  "type": "http",
+  "url": "https://mcp.webexapis.com/mcp/webex-meeting",
+  "oauth": {
+    "clientId": "<CLIENT_ID>",
+    "callbackPort": <PORT>,
+    "scopes": "<MEETINGS SCOPE STRING>"
+  }
+}' --scope user --client-secret
 ```
+
+`callbackPort` is a **number**, unquoted. `scopes` is the space-separated form from Step 2, not the bullet list. The
+same port serves both: it is bound only briefly during each sign-in, and sign-ins happen one at a time.
+
+**`--client-secret` prompts for the secret with masked input**, so the value never reaches the transcript or the shell
+history. Your own Bash tool is not interactive, so **the user runs these in their terminal** — give them the commands
+and wait. It prompts once per command, so with both servers they enter the same secret twice.
 
 The flag works alongside the JSON `oauth` object, so the scopes stay pinned. Without it, consent succeeds and the
 **token exchange** then fails — see the `client_secret` entry under Troubleshooting.
@@ -246,10 +295,10 @@ Tell the user where the secret ends up: the system keychain on macOS, or a crede
 Use `--scope user` so Webex is available in every project. Use `--scope project` only if the user explicitly wants it
 limited to the current repository.
 
-If a server named `webex-messaging` already exists, `claude mcp remove webex-messaging --scope user` first, then re-add — that is also
+If a server of the same name already exists, `claude mcp remove <name> --scope user` first, then re-add — that is also
 how you change the port or scopes later.
 
-**If you have no shell**, present the command as a copyable block and wait for the user to confirm they ran it.
+**If you have no shell**, present the commands as copyable blocks and wait for the user to confirm they ran them.
 
 Then write the disclaimer, if Step 3 chose one. It goes in a fixed location the guard hook reads:
 
@@ -278,14 +327,21 @@ If the user declined a disclaimer, write nothing — an absent file means no dis
 
 ### Step 7: Sign in
 
-Only one part of this genuinely needs the user — clicking through the Webex consent screen. Drive everything else
-yourself rather than handing over a list of instructions.
+Only one part of this genuinely needs the user — clicking through the Webex consent screen, once per server. Drive
+everything else yourself rather than handing over a list of instructions.
 
-**First, look for the server's auth tool.** A registered server that needs authentication exposes
-`mcp__webex-messaging__authenticate` and `mcp__webex-messaging__complete_authentication`. Search your available tools
-for a name ending in `__authenticate` for this server.
+**Do all servers in this one step.** Each has its own token, so each needs its own consent, but the restart above
+covered both registrations — so this is two browser trips at worst, not two rounds of setup. Finish one server before
+starting the next, and say which one you are on if there are two.
+
+**First, look for each server's auth tool.** A registered server that needs authentication exposes
+`mcp__<server>__authenticate` and `mcp__<server>__complete_authentication` — so
+`mcp__webex-messaging__authenticate`, `mcp__webex-meeting__authenticate`. Search your available tools for names ending
+in `__authenticate`.
 
 #### If the auth tool is there
+
+Run this sequence per server.
 
 1. **Call `authenticate`.** It returns the authorization URL with the correct PKCE challenge and state already in it.
    Never hand-build this URL, and never use the sample URL from the Webex developer site — that one has a placeholder
@@ -295,10 +351,12 @@ for a name ending in `__authenticate` for this server.
      `localhost`; older ones emitted `127.0.0.1`. The port must be the one from Step 4, and the **exact** string, host
      included, must be registered on the Integration. If the URL carries a host the user has not registered, give them
      the exact value to add.
-   - `scope` must match the Step 2 string, with nothing extra.
+   - `scope` must match **that server's** Step 2 string, with nothing extra. Check against the right one: a Meetings
+     URL carrying `spark:messages_*`, or a Messaging URL carrying `meeting:*`, means the wrong scope string went into
+     the wrong `add-json`.
 
    If either is wrong, **stop and fix it** rather than letting the user walk into the error. A port mismatch means
-   adding that redirect URI to the Integration; extra scopes mean re-running Step 6 with the right pinned set.
+   adding that redirect URI to the Integration; wrong scopes mean re-running Step 6 for that server.
 3. **Open it for them.** Offer to launch the browser and do it on confirmation: `open <url>` on macOS,
    `xdg-open <url>` on Linux, `start "" "<url>"` on Windows.
 4. **Copy it to the clipboard as well** — `pbcopy`, `clip.exe`, or `xclip -selection clipboard` — and print it as one
@@ -310,15 +368,27 @@ for a name ending in `__authenticate` for this server.
    exchange happens after that**, and when it fails there is no visible sign: no error in the tab, and no error in the
    conversation. Treat a closed tab as no evidence at all.
 
-   Two checks that do mean something:
+   **Verify it yourself with a read-only call.** Do not ask the user to run `/mcp` — a successful tool call is
+   stronger evidence than a status screen, and it costs them nothing. Pick one covered by the scopes they granted:
 
-   - **Ask the user to run `/mcp`.** A token-exchange failure is reported only there. You cannot run it yourself.
-   - **Look for the `webex-*` tools in your own tool list.** If they are present, the exchange succeeded.
+   | Server | Call | Needs |
+   | --- | --- | --- |
+   | Messaging | `webex-search-spaces` with `max: 3`, `sortBy: "lastactivity"` | `spark:rooms_read` |
+   | Meetings | `webex-list-meetings` with a small `max` | `meeting:schedules_read` |
 
-   Do **not** use `claude mcp get webex-messaging` as evidence either way: it runs in its own process, so it reports
-   `Needs authentication` regardless of the live session's state.
+   Live data back means the token exchange succeeded. Report it in one line — the space or meeting names are proof
+   enough.
 
-   If the redirect page errors, ask for the full address-bar URL and pass it to `complete_authentication`.
+   If the granted scopes cover no read-only call — for instance Meetings with only
+   `Create, change and cancel meetings` — say that rather than calling a tool that would create something.
+
+   **If the call fails**, then ask the user to run `/mcp`, because that is where the underlying error text appears. A
+   token-exchange failure shows up there and nowhere else; see the `client_secret` entry under Troubleshooting for the
+   most likely one. Do **not** use `claude mcp get <name>` as evidence either way — it runs in its own process and
+   reports `Needs authentication` regardless of the live session's state.
+
+   If the redirect page itself errored, ask for the full address-bar URL and pass it to that server's
+   `complete_authentication`.
 
 #### If the auth tool is missing
 
@@ -348,19 +418,34 @@ You cannot do this yourself: restarting and slash commands both belong to the us
 Tell them `claude --continue` reopens this conversation rather than starting a fresh one, because the usual worry
 about restarting is losing the thread.
 
-Do not offer `/reload-plugins` as a shortcut. It reloads MCP servers that a *plugin* provides, and this server was
-registered into the user's own configuration, so it may not be covered. Restarting is the reliable action.
+Do not offer `/reload-plugins` as a shortcut. It reloads MCP servers that a *plugin* provides, and these servers are
+registered into the user's own configuration, so it may not cover them. Restarting is the reliable action.
 
-### Step 8: Verify
+### Step 8: Close out with things to try
 
-Do not treat a completed sign-in as success. Make a read-only call:
+Verification already happened in Step 7 — do not repeat it, and do not recap the setup or re-list the granted scopes.
 
-> List my 3 most recently active Webex group spaces.
+Instead, **write four or five sample prompts the user can paste straight in**, derived from the capabilities they
+actually granted. Not a menu of features — real sentences, in their words, that would work right now. Only include a
+prompt if every scope it needs was granted.
 
-Live data back means it works. If the user granted read-only access, do not test by posting.
+Draw from these, and prefer ones that combine two servers when both are connected, since that is the thing neither
+server does alone:
 
-Then say where the settings live: re-run `/webex:setup` to change capabilities or the port, and edit
-`~/.claude/webex-mcp/disclaimer.txt` to change or remove the disclaimer.
+| Granted | Prompts worth offering |
+| --- | --- |
+| Messaging read | "Summarise what happened in the *X* space today." · "Find the messages where we decided on *Y*." · "What's outstanding on me across my Webex spaces?" |
+| Messaging write | "Reply in that thread saying the deploy is done." · "Send *N* a Webex message asking for a review." |
+| Meetings read | "What meetings do I have tomorrow?" · "Pull the transcript from this morning's *X* call and list the decisions." · "Who's in my current meeting?" |
+| Meetings AI summaries | "Give me the action items from yesterday's *X* meeting." |
+| Meetings write | "Schedule a 30-minute follow-up with *N* on Thursday afternoon." |
+| Both servers | "Summarise this morning's *X* meeting and post the action items to the *X* space." · "Find the meeting where we discussed *Y*, then tell me who raised it in chat afterwards." |
+
+Substitute real names where you can — a space or meeting you saw during the Step 7 verification call makes a prompt
+concrete rather than a template. Do not invent names you have not seen.
+
+Then two short lines: re-run `/webex:setup` to change capabilities or the port, and, only if a disclaimer was set, that
+it lives in `~/.claude/webex-mcp/disclaimer.txt` and can be edited or deleted.
 
 ---
 
@@ -378,8 +463,8 @@ step. If you have a shell:
 3. `claude mcp get webex-messaging` is still useful for reading back the *configuration* — `clientId`, `callbackPort`,
    `scopes` — just not the auth state. A port or scope change means re-running Step 6, not editing the file by hand.
 
-If the tools are present, registration and sign-in both succeeded — go straight to the Step 8 verification call, or to
-**Troubleshooting** if one specific tool is failing.
+If the tools are present, registration and sign-in both succeeded — go straight to Step 8, or to **Troubleshooting** if
+one specific tool is failing.
 
 Tell the user what you found rather than silently resuming — "Looks like the plugin is configured and just needs the
 browser sign-in, want me to pick up there?" — and continue from that point instead of redoing finished work.

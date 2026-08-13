@@ -20,9 +20,12 @@ Webex provides MCP servers that enable AI agents to securely access various Webe
 
 ## Agent plugin
 
-This repository publishes a plugin for the **Messaging** MCP server, so you can connect without hand-editing any
-configuration. It installs **directly from this repository** — it does not depend on being listed in any curated
-plugin directory.
+This repository publishes a plugin for the **Messaging** and **Meetings** MCP servers, so you can connect without
+hand-editing any configuration. It installs **directly from this repository** — it does not depend on being listed in
+any curated plugin directory.
+
+Vidcast is deliberately not covered: its three scopes cannot be narrowed and include `Identity:Organization` and
+`Identity:Config`, which is organization-level identity access for a read-only video tool.
 
 ### Claude Code
 
@@ -51,24 +54,28 @@ Then open `/plugins` in the Codex CLI, select **Webex**, and install it.
 The plugin deliberately declares **no configuration form**. It ships a wizard instead, so the first thing you see is
 an explanation rather than an empty field asking for a client ID. Ask your agent to *set up Webex*, and it will:
 
-1. Explain what is being connected, and that it posts **as you**, not as a bot
-2. Offer the **capabilities as a checklist**, so you grant only what you need — nothing more is requested at sign-in
+1. Ask **which servers** you want — Messaging, Meetings, or both
+2. Offer each server's **capabilities as a checklist**, so you grant only what you need
 3. Offer an **AI disclaimer** for outgoing messages, but only if you granted write access
 4. **Test that the callback port can actually be bound** — on Windows, macOS or Linux — and pick another if not
-5. Hand you the exact **Redirect URI and scope list** to paste into your Webex Integration
-6. Register the server with the port and scopes pinned, taking the client secret through a masked prompt
-7. Check the authorization URL before you click, then verify with a read-only call
+5. Hand you the **Redirect URIs and scope list** for a **single** Webex Integration covering everything you chose
+6. Register the servers with port and scopes pinned, taking the client secret through a masked prompt
+7. Check each authorization URL before you click, then **verify with a read-only call itself**
+8. Suggest sample prompts based on what you actually granted
 
-One question at a time, and the same skill doubles as the troubleshooter for `invalid_scope`, redirect failures
-and 403s.
+One question at a time. Every decision is collected before you are sent to the Webex site, so it is **one Integration
+and one restart** even when connecting both servers — only the browser consent repeats, once per server.
+
+The same command doubles as the troubleshooter for `invalid_scope`, redirect failures and 403s.
 
 ### Removing it
 
-The wizard registers the Webex server, so it outlives the plugin. To remove everything:
+The wizard registers the servers, so they outlive the plugin. To remove everything:
 
 ```bash
 claude plugin uninstall webex@webex-mcp-official
 claude mcp remove webex-messaging
+claude mcp remove webex-meeting     # if you connected Meetings
 ```
 
 ### Doing it by hand
@@ -84,9 +91,14 @@ Then run `/mcp`, choose **webex**, and complete the browser sign-in.
 
 ### Notes
 
-The default capability set deliberately excludes space deletion, membership changes and webhook management. All 24
-tools are still exposed by the server, so the ones needing an ungranted scope return **403** — that is the narrow
-grant working as intended, not a broken setup. The `/webex:setup` command covers widening it.
+The default capability sets are deliberately narrow: no space deletion, membership changes or webhook management on
+Messaging, and no meeting creation on Meetings. Each server still exposes all of its tools, so the ones needing an
+ungranted scope return **403** — that is the narrow grant working as intended, not a broken setup. The `/webex:setup`
+command covers widening it.
+
+Meeting creation is worth singling out: `webex-create-meeting` and `webex-update-meeting` **send real email** to
+invitees, and cancelling emails them too. It is the most consequential grant the wizard offers, which is why it is off
+by default.
 
 The plugin also installs a `PreToolUse` guard that catches three calls which succeed while producing the wrong
 outcome. It runs in the harness, so it costs nothing in context:

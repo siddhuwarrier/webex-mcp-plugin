@@ -15,7 +15,8 @@ description: |
 # Webex MCP setup
 
 You help a user connect their editor to Cisco's **hosted** Webex MCP servers from nothing, conversationally and end
-to end. Nothing is self-hosted and there is no bot token: they authenticate as the user over OAuth 2.0.
+to end. Nothing is self-hosted, and the connection acts as the user over OAuth 2.0 rather than as a bot — but it does
+need the client ID **and client secret** of a Webex Integration they own.
 
 Three servers exist — Messaging, Meetings and Vidcast. **This skill currently covers Messaging.**
 
@@ -163,19 +164,21 @@ nothing left to work out:
 
 > Go to **[developer.webex.com/my-apps](https://developer.webex.com/my-apps) → Create a New App → Integration**
 >
-> - **Redirect URIs:** add **both** of these
->   - `http://127.0.0.1:<PORT>/callback`
->   - `http://localhost:<PORT>/callback`
+> - **Redirect URIs:** add `http://localhost:<PORT>/callback` — this one is required.
+>   Optionally add `http://127.0.0.1:<PORT>/callback` as well, in case a future version switches host.
 > - **Scopes:** tick exactly these — `<THE SCOPE LIST FROM STEP 2>`
 >
-> Then copy the **Client ID** and paste it back here.
+> Then copy **both** the **Client ID** and the **Client Secret**, and paste them back here.
 
-Explain why both: Webex compares redirect URIs as **exact strings**, and which host the editor uses is not something
-this skill can promise. Claude Code has generated `127.0.0.1` in some versions and `localhost` in others, and a
-mismatch fails at the redirect with an error that never mentions the hostname. Webex allows several redirect URIs, so
-registering both costs nothing and removes the guess. Step 7 confirms which one is actually in use.
+Webex compares redirect URIs as **exact strings**. Claude Code currently builds the callback URL with `localhost`, so
+that spelling must be registered or sign-in cannot succeed. Adding the `127.0.0.1` form too is cheap insurance —
+Webex allows several, and earlier versions used that host — but `localhost` is the one that has to be there. Step 7
+reads the host back out of the real authorization URL, so a future change surfaces as a clear message rather than a
+silent failure.
 
-Tell them to ignore the client secret: this connects as a public PKCE client and does not use one.
+**The Client Secret is required.** Webex Integrations are confidential clients: the token endpoint rejects the
+exchange without `client_secret`, even though the flow uses PKCE. Say plainly that this is a real secret, unlike the
+client ID. Do not paste it into the conversation — Step 6 collects it through a masked prompt.
 
 Wait for the Client ID. It is not a secret, but do not write it to a file.
 
@@ -200,6 +203,22 @@ claude mcp add-json webex-messaging '{
 ```
 
 `callbackPort` is a **number**, unquoted. `scopes` is a single space-separated string.
+
+**Add `--client-secret` to that command.** It prompts for the secret with masked input, so the value never reaches the
+transcript or the shell history:
+
+```bash
+claude mcp add-json webex-messaging '{ ... as above ... }' --scope user --client-secret
+```
+
+The flag works alongside the JSON `oauth` object, so the scopes stay pinned. Without it, consent succeeds and the
+**token exchange** then fails — see the `client_secret` entry under Troubleshooting.
+
+For a non-interactive environment, `MCP_CLIENT_SECRET=<secret> claude mcp add-json …` reads it from the environment
+instead. Prefer the prompt when a human is present.
+
+Tell the user where the secret ends up: the system keychain on macOS, or a credentials file elsewhere — **not** in
+`~/.claude.json`. That is worth saying, because it is the one real credential in this setup.
 
 Use `--scope user` so Webex is available in every project. Use `--scope project` only if the user explicitly wants it
 limited to the current repository.
@@ -249,10 +268,10 @@ for a name ending in `__authenticate` for this server.
    Never hand-build this URL, and never use the sample URL from the Webex developer site — that one has a placeholder
    `state` and no `code_challenge`, so the local listener rejects the callback.
 2. **Check the URL before the user ever sees it**, and say what you checked:
-   - `redirect_uri` — read the host and port out of the URL rather than assuming either. The port must be the one
-     from Step 4, and the **exact** string, host included, must be registered on the Integration. Do not assert that
-     it will be `127.0.0.1`: it varies by version, which is why Step 5 registers both spellings. If the URL carries a
-     host the user has not registered, tell them the exact value to add.
+   - `redirect_uri` — read the host and port out of the URL rather than assuming either. Current versions emit
+     `localhost`; older ones emitted `127.0.0.1`. The port must be the one from Step 4, and the **exact** string, host
+     included, must be registered on the Integration. If the URL carries a host the user has not registered, give them
+     the exact value to add.
    - `scope` must match the Step 2 string, with nothing extra.
 
    If either is wrong, **stop and fix it** rather than letting the user walk into the error. A port mismatch means
@@ -262,8 +281,21 @@ for a name ending in `__authenticate` for this server.
 4. **Copy it to the clipboard as well** — `pbcopy`, `clip.exe`, or `xclip -selection clipboard` — and print it as one
    unwrapped line. These URLs are long, and terminal multiplexers insert wrapping characters that silently corrupt a
    hand-made selection.
-5. **Wait, then confirm** the `webex-*` tools have appeared. If the redirect page errors, ask for the full
-   address-bar URL and pass it to `complete_authentication`.
+5. **Wait, then check the outcome properly.** This is where the setup looks finished but may not be.
+
+   A callback tab that loads and closes itself proves only that the browser reached the local listener. The **token
+   exchange happens after that**, and when it fails there is no visible sign: no error in the tab, and no error in the
+   conversation. Treat a closed tab as no evidence at all.
+
+   Two checks that do mean something:
+
+   - **Ask the user to run `/mcp`.** A token-exchange failure is reported only there. You cannot run it yourself.
+   - **Look for the `webex-*` tools in your own tool list.** If they are present, the exchange succeeded.
+
+   Do **not** use `claude mcp get webex-messaging` as evidence either way: it runs in its own process, so it reports
+   `Needs authentication` regardless of the live session's state.
+
+   If the redirect page errors, ask for the full address-bar URL and pass it to `complete_authentication`.
 
 #### If the auth tool is missing
 
@@ -314,12 +346,14 @@ Then say where the settings live: re-run `/webex:setup` to change capabilities o
 Setup gets interrupted. Before starting over, work out what is already done and continue from the first incomplete
 step. If you have a shell:
 
-1. `claude mcp list` — is a `webex-messaging` server listed? Absent means Step 6 has not run. `Needs authentication`
-   means it is registered and only the browser sign-in is outstanding (Step 7). If it is listed there but its
+1. `claude mcp list` — is a `webex-messaging` server listed? Absent means Step 6 has not run. If it is listed but its
    `__authenticate` tool is not among your available tools, the session predates the registration — go to the restart
    instructions in Step 7.
-2. `claude mcp get webex-messaging` — check the registered `clientId`, `callbackPort` and `scopes` against what the user wants.
-   A port or scope change means re-running Step 6, not editing the file by hand.
+2. **Are the `webex-*` tools in your tool list?** That is the only reliable signal that sign-in and token exchange both
+   succeeded. Neither `claude mcp list` nor `claude mcp get` can tell you: both run in their own process and report
+   `Needs authentication` regardless of the live session's state. Do not read authentication status out of either.
+3. `claude mcp get webex-messaging` is still useful for reading back the *configuration* — `clientId`, `callbackPort`,
+   `scopes` — just not the auth state. A port or scope change means re-running Step 6, not editing the file by hand.
 3. Are `webex-*` tools already in your tool list? Then registration and sign-in both succeeded — go straight to the
    Step 8 verification call, or to **Troubleshooting** if one specific tool is failing.
 
@@ -334,6 +368,23 @@ With no shell, ask the user which of the steps they have already completed.
 
 The server will not register an OAuth client, so it needs a client ID. The registration is missing one — check
 `claude mcp get webex-messaging`, and re-run Step 6 with the client ID from the user's Integration.
+
+### `client_secret cannot be null or empty`
+
+The Integration's client secret was not supplied. Consent succeeds, the callback reaches the local listener, and the
+**token exchange** then fails, so nothing looks wrong until the user runs `/mcp`.
+
+It usually surfaces as a **Zod parse error**, because Webex returns a non-standard error body the client cannot parse.
+The useful text is under `Raw body`:
+
+```
+HTTP 400: Invalid OAuth error response: ZodError [...]
+Raw body: {"message":"client_secret cannot be null or empty", ...}
+```
+
+Webex Integrations are confidential clients — PKCE does not exempt them. Re-run Step 6 including `--client-secret`.
+If the user no longer has the secret, it can be regenerated on the Integration at developer.webex.com/my-apps, which
+invalidates the previous one.
 
 ### `invalid_scope`
 
@@ -386,7 +437,7 @@ appending anything. No restart is needed — the hook reads it on every call.
 If `claude mcp add-json` is unavailable in the user's host, fall back to the flag form, which cannot pin scopes:
 
 ```bash
-claude mcp add --transport http --client-id <CLIENT_ID> --callback-port <PORT> \
+claude mcp add --transport http --client-id <CLIENT_ID> --client-secret --callback-port <PORT> \
   webex-messaging https://mcp.webexapis.com/mcp/webex-messaging
 ```
 
@@ -403,7 +454,8 @@ In a host with no shell at all, present the commands as copyable blocks and wait
 - **Control Hub enablement is out of reach.** If an administrator has not enabled MCP access for the organization,
   sign-in can succeed while every call is refused, and only an administrator can fix it.
 - **This is not zero-config, by design of the upstream server.** Unlike servers that ship a public pre-registered
-  OAuth client, Webex requires each user to create their own Integration. The wizard removes the guesswork, not the
-  step.
+  OAuth client, Webex requires each user to create their own Integration — and because Webex Integrations are
+  confidential clients, each user also supplies a client secret. No plugin can ship either on their behalf. The wizard
+  removes the guesswork, not the steps.
 - **The port check is a pre-flight, not a reservation.** Another process can claim the port between the check and
   sign-in.

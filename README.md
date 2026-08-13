@@ -56,7 +56,8 @@ an explanation rather than an empty field asking for a client ID. Ask your agent
 3. Offer an **AI disclaimer** for outgoing messages, but only if you granted write access
 4. **Test that the callback port can actually be bound** — on Windows, macOS or Linux — and pick another if not
 5. Hand you the exact **Redirect URI and scope list** to paste into your Webex Integration
-6. Register the server with the port and scopes already pinned, then verify with a read-only call
+6. Register the server with the port and scopes pinned, taking the client secret through a masked prompt
+7. Check the authorization URL before you click, then verify with a read-only call
 
 One question at a time, and the same skill doubles as the troubleshooter for `invalid_scope`, redirect failures
 and 403s.
@@ -74,9 +75,9 @@ claude mcp remove webex-messaging
 
 1. **Control Hub**: a Webex administrator must enable the MCP server for your organization.
 2. **Create an Integration** at [developer.webex.com/my-apps](https://developer.webex.com/my-apps) with:
-   - Redirect URIs — register **both** `http://127.0.0.1:35621/callback` and `http://localhost:35621/callback`.
-     Webex matches redirect URIs as exact strings, and which host your editor uses varies by version; registering
-     both removes the guesswork
+   - Redirect URI `http://localhost:35621/callback` — required. Webex matches redirect URIs as exact strings, and
+     Claude Code builds the callback with `localhost`. Adding the `127.0.0.1` form too is cheap insurance against a
+     future version switching host
    - The scopes you want, which must include `spark:mcp`
 
 Then run `/mcp`, choose **webex**, and complete the browser sign-in.
@@ -102,7 +103,8 @@ The guard is a dependency-free Node script, so it behaves the same on Windows, m
 if `node` is not on your `PATH`, the hook exits without a decision and the call proceeds. Node is therefore a
 prerequisite for the guard working, never for the plugin working.
 
-Authentication is OAuth as *you*, not as a bot: there is no token to store and nothing to self-host.
+Authentication is OAuth as *you*, not as a bot, and there is nothing to self-host. You do supply your Integration's
+client ID and client secret; the secret goes to your keychain rather than any config file.
 
 ---
 

@@ -1,6 +1,6 @@
 {
   "name": "webex",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Guided setup and troubleshooting for Cisco's hosted Webex MCP servers.",
   "author": {
     "name": "Cisco DevNet",

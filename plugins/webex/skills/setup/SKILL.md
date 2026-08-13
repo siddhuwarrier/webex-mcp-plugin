@@ -26,15 +26,30 @@ prevent.
 
 ## How to run this
 
-- **Ask one question at a time**, and wait for the answer before moving on. Never batch decisions into one message.
-- **Use selectable options where your host supports them.** In Claude Code use `AskUserQuestion` — `multiSelect: true`
-  for the capability checklist. In hosts without it, ask in plain language and list the options, but still one
-  question per turn. Do not paste a table of scopes and ask the user to type which they want.
-- **Explain before asking.** One or two sentences on what the choice affects and what breaks if it is wrong.
-- **Some steps run commands, some cannot.** Where a step needs a shell, branch on whether you have one — see
-  each step. In hosts with no shell (claude.ai, Claude Desktop), present copyable blocks and wait for the user to
-  confirm they ran them.
-- **Do not dump the whole plan up front.** Step 0's summary, then one decision at a time.
+**This file is context for you, not a script to read out.** The explanations here exist so you make the right call at
+each step — do not relay them. A user who wanted this much detail would have opened the README.
+
+Output discipline, which matters more than any other instruction here:
+
+- **Two or three lines per step.** One line of context, then the question. If a step needs more, you are explaining
+  something the user has not asked about.
+- **Never restate what just happened.** No "so far we have chosen…" recaps between steps, and no summary of the
+  choices at the end. They made them a moment ago.
+- **Give the reason only when it changes what they do.** "The client secret is required" earns its line, because
+  omitting it breaks sign-in in a way that is hard to diagnose. Why Webex is a confidential client does not.
+- **Report outcomes in a few words.** "Port 35621 is free." "Registered." Not a paragraph describing what you ran.
+- **Save the caveats for when they bite.** Do not pre-emptively warn about failures that have not happened;
+  Troubleshooting covers them if they do.
+
+Then the mechanics:
+
+- **One question per turn.** Wait for the answer. Never batch decisions into one message.
+- **Use selectable options where your host supports them** — in Claude Code, `AskUserQuestion` with
+  `multiSelect: true` for the checklists. Elsewhere, list them in plain language, still one question per turn. Never
+  paste a table of scopes and ask the user to type a choice.
+- **Some steps need a shell.** Where one does, branch on whether you have it. With no shell (claude.ai, Claude
+  Desktop), give a copyable block and wait for confirmation.
+- **Do not dump the plan up front.** Step 0, then one decision at a time.
 
 If the user is returning to a half-finished setup, read **Resuming a partial setup** first.
 
@@ -42,14 +57,17 @@ If the user is returning to a half-finished setup, read **Resuming a partial set
 
 ### Step 0: Say what this is
 
-Before the first question, tell the user in about four lines:
+**Two lines, then move on.** Cover only: this connects Webex to their editor and acts **as them**, not as a bot; it
+takes about five minutes and one step happens on the Webex developer site.
 
-- This connects their editor to Cisco's hosted Webex MCP servers, so they can work with Webex without opening it.
-- It acts **as them**, not as a bot. Anything posted appears under their own name.
-- They will need a browser, and a Webex organization where an administrator has enabled MCP access.
-- It takes about five minutes, and one step happens on the Webex developer site.
+Something like:
 
-Then go straight into Step 1. Do not ask permission to begin.
+> Connecting Webex to your editor — it'll act as you, not a bot. About five minutes, with one step on
+> developer.webex.com.
+
+Do not list prerequisites, do not preview the steps, and do not ask permission to begin. Go straight into Step 1. If
+their organization has not enabled MCP access, Step 8 surfaces it; saying so now is a warning about a failure that
+probably will not happen.
 
 ### Step 1: Which Webex servers?
 
@@ -164,17 +182,20 @@ nothing left to work out:
 
 > Go to **[developer.webex.com/my-apps](https://developer.webex.com/my-apps) → Create a New App → Integration**
 >
-> - **Redirect URIs:** add `http://localhost:<PORT>/callback` — this one is required.
->   Optionally add `http://127.0.0.1:<PORT>/callback` as well, in case a future version switches host.
+> - **Redirect URIs:** add **both**
+>   - `http://localhost:<PORT>/callback`
+>   - `http://127.0.0.1:<PORT>/callback`
 > - **Scopes:** tick exactly these — `<THE SCOPE LIST FROM STEP 2>`
 >
 > Then copy **both** the **Client ID** and the **Client Secret**, and paste them back here.
 
-Webex compares redirect URIs as **exact strings**. Claude Code currently builds the callback URL with `localhost`, so
-that spelling must be registered or sign-in cannot succeed. Adding the `127.0.0.1` form too is cheap insurance —
-Webex allows several, and earlier versions used that host — but `localhost` is the one that has to be there. Step 7
-reads the host back out of the real authorization URL, so a future change surfaces as a clear message rather than a
-silent failure.
+Both, because Webex compares redirect URIs as **exact strings** and Claude Code has been observed using either host —
+`localhost` in current versions, `127.0.0.1` in earlier ones. Webex allows several redirect URIs, so registering both
+costs nothing and removes a guess that fails at the redirect with an error that never names the hostname. Step 7 reads
+the host back out of the real authorization URL and checks it against these, so a mismatch is reported rather than
+hit.
+
+Tell the user to add both. Do not explain the version history.
 
 **The Client Secret is required.** Webex Integrations are confidential clients: the token endpoint rejects the
 exchange without `client_secret`, even though the flow uses PKCE. Say plainly that this is a real secret, unlike the

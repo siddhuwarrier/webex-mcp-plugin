@@ -17,69 +17,78 @@ exists to prevent.
 
 ## Part 1 — Run the wizard
 
-Work through these steps in order, then hand the user one set of values to register.
+### How to run it
 
-### Step 1: Pick the capabilities
+This is an interactive wizard, not a document to read out. Follow these rules or the experience is wrong:
 
-The server defines **9 scopes**. `spark:mcp` is mandatory, so the user is choosing among the other 8.
+- **Ask one question per turn** with `AskUserQuestion`, and wait for the answer before moving on. Never batch
+  several questions into one call, and never ask the user to answer three things in one message.
+- **Use selectable options, not prose.** Every choice below has fixed options. Do not paste a markdown table of
+  scopes and ask the user to type which ones they want.
+- **Explain before asking.** Each question gets one or two sentences of context first — what it affects and what
+  happens if they get it wrong.
+- **Do not dump the whole plan up front.** The user sees Step 0's summary, then one decision at a time.
 
-Present them as a **multi-select checklist** — `AskUserQuestion` with `multiSelect: true` — grouping the
-read/write pairs that are only useful together. Preselect group 1, the common case.
+### Step 0: Say what this is
 
-| # | Checklist option | Scopes granted | Tools it unlocks |
-| --- | --- | --- | --- |
-| 1 | Read and post messages *(default)* | `spark:messages_read` `spark:messages_write` `spark:rooms_read` | `webex-get-message`, `webex-search-messages`, `webex-get-thread`, `webex-get-file-details`, `webex-download-file`, `webex-create-message`, `webex-edit-message`, `webex-delete-message`, `webex-create-thread-reply`, `webex-share-file`, `webex-upload-file`, `webex-get-space`, `webex-search-spaces` |
-| 2 | Create, rename and delete spaces | `spark:rooms_write` | `webex-create-space`, `webex-update-space`, `webex-delete-space` |
-| 3 | See and change space membership | `spark:memberships_read` `spark:memberships_write` | `webex-get-membership`, `webex-add-membership`, `webex-update-membership`, `webex-remove-membership` |
-| 4 | Manage webhooks | `spark:webhooks_read` `spark:webhooks_write` | `webex-get-webhook`, `webex-create-webhook`, `webex-update-webhook`, `webex-delete-webhook` |
+Before the first question, tell the user in about four lines:
 
-That accounts for all 9: `spark:mcp` (always) + 3 + 1 + 2 + 2.
+- This connects their editor to Cisco's hosted Webex Messaging MCP server, so they can read, search and post Webex
+  messages without opening Webex.
+- It acts **as them**, not as a bot. Anything posted appears under their own name.
+- They will need a browser, and a Webex organization where an administrator has enabled MCP access.
+- It takes about five minutes, and one step happens on the Webex developer site.
 
-Say these while asking, because they are not obvious from the scope names:
+Then go straight into Step 1. Do not ask permission to begin.
 
-- **Group 1** posts, edits and deletes **as the user**, not as a bot.
-- **Group 2** includes `webex-delete-space`, and **deleting a space cannot be undone**.
-- **Group 3** can remove colleagues from spaces.
-- **Group 4** is rarely useful for editor work; webhooks need a publicly reachable callback URL.
+### Step 1: Which capabilities? (checklist)
 
-If the user wants read-only access, offer group 1 without `spark:messages_write` — a common enough combination to
-name explicitly. Do not offer a "grant everything" shortcut; the point of the checklist is that each capability is
-a deliberate choice. If the user asks for all 9 anyway, that is their call — restate what `spark:rooms_write` and
-`spark:memberships_write` allow, then proceed.
+Explain that Webex grants access per capability, that the choice can be widened later, and that anything not granted
+returns a 403 rather than failing silently.
 
-Build the result as one space-separated string with `spark:mcp` first.
+Then ask with `AskUserQuestion`, `multiSelect: true`, header `Capabilities`, using **exactly these four options**:
 
-### Step 2: Offer the AI disclaimer
+| Option label | Description to show | Scopes it contributes |
+| --- | --- | --- |
+| `Read and post messages` | Read, search and post messages, reply in threads, and list spaces. Covers almost all editor use. Posts appear as you. | `spark:messages_read` `spark:messages_write` `spark:rooms_read` |
+| `Read messages only` | Read and search messages and spaces, with no ability to post or edit anything. | `spark:messages_read` `spark:rooms_read` |
+| `Create and delete spaces` | Create, rename and delete Webex spaces. Deleting a space cannot be undone. | `spark:rooms_write` |
+| `Manage space membership` | See who is in a space, and add or remove people. Can remove colleagues. | `spark:memberships_read` `spark:memberships_write` |
 
-**Only ask this if Step 1 granted a message-write scope.** With read-only access nothing is ever posted, so the
-question is noise.
+Preselect **Read and post messages**. Webhook management (`spark:webhooks_read`, `spark:webhooks_write`) is
+deliberately not offered — it needs a publicly reachable callback URL and is not useful from an editor. Add it only
+if the user asks for it by name.
 
-Ask whether outgoing messages should carry an AI disclaimer, **defaulting to yes**. Show the default text so the
-user can judge it, and say they can replace it:
+If the user picks both `Read and post messages` and `Read messages only`, treat the read-only choice as the
+narrower intent and confirm which they meant before continuing.
 
-> _This message was generated using AI and posted using the Webex MCP server. Apologies in advance for any errors or omissions_
+Build one space-separated scope string from the selections, always starting with `spark:mcp`, which the server
+requires. Show the user the final string and say it will be requested at sign-in.
 
-Tell them how it behaves, because it is not obvious:
+### Step 2: AI disclaimer? (only if they can post)
 
-- It is appended **in italics on its own line at the end of every message** the server posts, including thread
-  replies.
-- It is applied by a hook, so it cannot be forgotten or talked out of — and it is idempotent, so a retry does not
-  duplicate it.
-- Edits to an existing message do not re-append it, since the original already carries it.
+**Skip this step entirely if Step 1 granted no write scope.** Nothing is ever posted, so the question is noise.
 
-If they want their own wording, take it verbatim and use it in place of the default. If they decline, set
-`webex_disclaimer` to an empty string, which disables the append.
+Explain that outgoing messages can carry an automatic note saying they were AI-generated, appended in italics on its
+own line, applied by a hook so it cannot be forgotten.
 
-Whether AI-generated messages must be labelled is a policy question in some organizations — if the user is unsure,
-say that leaving it on is the cautious choice.
+Ask with `AskUserQuestion`, single-select, header `Disclaimer`, using **exactly these three options**:
 
-### Step 3: Settle the callback port
+| Option label | Description to show |
+| --- | --- |
+| `Yes, use the default` | Appends: _This message was generated using AI and posted using the Webex MCP server. Apologies in advance for any errors or omissions_ |
+| `Yes, but let me write it` | Same behaviour with your own wording. You will be asked for the text. |
+| `No disclaimer` | Messages go out with no added note. |
 
-Claude Code binds this port locally during sign-in, so **check that whichever port is chosen is free — including
-one the user names themselves.** Do not skip the check because the user chose deliberately; a port already in use
-fails at the redirect, and the error looks like a Webex problem rather than a local one.
+Default to **Yes, use the default**. If they choose their own wording, ask for it in a follow-up turn and use it
+verbatim. If they decline, set `webex_disclaimer` to an empty string.
 
-Start with the default, **35621**. Run the check for the user's platform:
+### Step 3: Which callback port?
+
+Explain that sign-in briefly runs a local listener, that the port must match what they register with Webex, and that
+a port already in use fails at the redirect with an error that looks like a Webex problem.
+
+Test the default first, **without asking** — there is no decision to make yet:
 
 **macOS or Linux**
 
@@ -102,40 +111,39 @@ try {
 ```
 
 Both attempt the bind rather than reading a process list, so they also catch ports held by another user's process.
-Fallbacks if the above is unavailable: `lsof -iTCP:<PORT> -sTCP:LISTEN -n -P` on macOS/Linux, or
-`netstat -ano | findstr :<PORT>` on Windows — treat any output as "in use". On Windows, note that `python3` is
-usually `python` or `py -3`, so prefer the PowerShell form there.
+Fall back to `lsof -iTCP:<PORT> -sTCP:LISTEN -n -P` or `netstat -ano | findstr :<PORT>` and treat any output as "in
+use". On Windows `python3` is usually `python` or `py -3`, so prefer the PowerShell form there.
 
-**Loop until a port passes:** if it is not free, propose another in the 1024–65535 range, confirm it, and run the
-same check on that one. Only continue once a port has passed.
+- **If 35621 is free:** say so and use it. Do not ask a question.
+- **If it is taken:** say what is holding it, test a nearby free port, and ask the user with `AskUserQuestion` to
+  confirm the suggested port or pick their own. **Re-run the bind test on whatever they choose**, including a port
+  they name themselves, and keep going until one passes.
 
-Two things to tell the user:
+Mention once that this is a pre-flight, not a reservation: if the redirect fails later, come back and re-test.
+Ports below 1024 need administrator rights and will not work.
 
-- The check is a pre-flight, not a reservation. Something else can take the port before sign-in; if the redirect
-  fails later, re-run this step.
-- Ports below 1024 need administrator privileges and will not work.
+### Step 4: Register the Integration on the Webex site
 
-Whatever passes must appear in both the Redirect URI and the plugin config, so settle it before continuing.
+This is the one step that cannot be automated — it needs a human signed in to Webex.
 
-### Step 4: Have the user create the Integration
-
-This needs a human signed in to Webex and cannot be automated. Give them the values already filled in:
+Give them the values already filled in, and nothing else to work out:
 
 > Go to **[developer.webex.com/my-apps](https://developer.webex.com/my-apps) → Create a New App → Integration**
 >
 > - **Redirect URI:** `http://127.0.0.1:<PORT>/callback`
-> - **Scopes:** tick exactly the scopes from Step 1
+> - **Scopes:** tick exactly these — `<THE SCOPE LIST FROM STEP 1>`
 >
-> Then copy the **Client ID**.
+> Then copy the **Client ID** and paste it back here.
 
-State explicitly that the Redirect URI must use **`127.0.0.1`, not `localhost`** — Webex compares redirect URIs as
-exact strings, and `localhost` fails at the redirect with an error that never mentions the hostname.
+Call out that the Redirect URI must use **`127.0.0.1`, not `localhost`** — Webex compares redirect URIs as exact
+strings, and `localhost` fails with an error that never mentions the hostname. Say they can ignore the client
+secret: this connects as a public PKCE client and does not use one.
 
-Ask them to paste the Client ID back. It is not a secret, but do not write it into a file.
+Wait for the Client ID. It is not a secret, but do not write it to a file.
 
-### Step 5: Write the configuration
+### Step 5: Apply the configuration
 
-Apply every value together:
+Install with every value at once:
 
 ```bash
 claude plugin install webex-messaging-mcp@webex-mcp-official \
@@ -145,22 +153,23 @@ claude plugin install webex-messaging-mcp@webex-mcp-official \
   --config "webex_disclaimer=<DISCLAIMER TEXT>"
 ```
 
-Omit the last flag to keep the default disclaimer, or pass it empty (`--config webex_disclaimer=`) to disable the
-append. Skip it entirely if Step 2 did not apply.
+Pass `--config webex_disclaimer=` empty to disable it, or omit the flag to keep the default.
 
-If the plugin is already installed, the user runs `/plugin configure` and updates the same fields — an installed
-plugin cannot be reconfigured from the command line.
+If the plugin is already installed, tell the user to run `/plugin configure`, pick this plugin, and set the same
+fields — an installed plugin cannot be reconfigured from the command line.
 
-### Step 6: Sign in and verify
+### Step 6: Sign in, then verify
 
-Have the user run `/mcp`, choose **webex**, and complete the browser sign-in. Then verify with a read-only call
-rather than declaring success:
+Tell them to run `/mcp`, choose **webex**, and complete the browser sign-in.
+
+Before they click through, it is worth checking the authorization URL matches what was set up — `redirect_uri`
+should be the port from Step 3, and `scope` should be the list from Step 1 and nothing more.
+
+Then verify with a read-only call rather than declaring success:
 
 > List my 3 most recently active Webex group spaces.
 
-Live data back means it works. If the user granted read-only scopes, do not test by posting.
-
----
+Live data back means it works. If they granted read-only access, do not test by posting.
 
 ## Part 2 — Troubleshooting
 

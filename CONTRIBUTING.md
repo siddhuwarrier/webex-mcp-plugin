@@ -113,9 +113,13 @@ Two properties to preserve:
 
 Two constraints are worth knowing before you change the OAuth configuration:
 
-- **Keep the default callback port stable.** Users register `http://127.0.0.1:<port>/callback` as the redirect URI in
-  their own Webex Integration. Changing the default the wizard suggests means existing users who re-run it silently
-  register a mismatched URI. Treat it as a breaking change.
+- **Keep the default callback port stable.** Users register `http://<host>:<port>/callback` as a redirect URI on their
+  own Webex Integration. Changing the default the wizard suggests means existing users who re-run it silently register
+  a mismatched URI. Treat it as a breaking change.
+- **Do not hard-code the callback host.** The wizard has the user register both `127.0.0.1` and `localhost`, and reads
+  the host out of the authorization URL rather than asserting one. Claude Code has generated each in different
+  versions, and Webex compares redirect URIs as exact strings, so a hard-coded host is a bug that surfaces only as an
+  unexplained redirect failure.
 - **Widen the default capability set only when a tool needs it.** It is deliberately narrower than the nine scopes the
   server advertises, so that a default setup cannot grant space deletion or membership changes. If you add a scope to
   the checklist, say which tool requires it in the pull request description.

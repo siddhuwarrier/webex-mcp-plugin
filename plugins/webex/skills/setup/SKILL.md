@@ -163,14 +163,19 @@ nothing left to work out:
 
 > Go to **[developer.webex.com/my-apps](https://developer.webex.com/my-apps) → Create a New App → Integration**
 >
-> - **Redirect URI:** `http://127.0.0.1:<PORT>/callback`
+> - **Redirect URIs:** add **both** of these
+>   - `http://127.0.0.1:<PORT>/callback`
+>   - `http://localhost:<PORT>/callback`
 > - **Scopes:** tick exactly these — `<THE SCOPE LIST FROM STEP 2>`
 >
 > Then copy the **Client ID** and paste it back here.
 
-Call out that the Redirect URI must use **`127.0.0.1`, not `localhost`** — Webex compares redirect URIs as exact
-strings, and `localhost` fails with an error that never mentions the hostname. Tell them to ignore the client
-secret: this connects as a public PKCE client and does not use one.
+Explain why both: Webex compares redirect URIs as **exact strings**, and which host the editor uses is not something
+this skill can promise. Claude Code has generated `127.0.0.1` in some versions and `localhost` in others, and a
+mismatch fails at the redirect with an error that never mentions the hostname. Webex allows several redirect URIs, so
+registering both costs nothing and removes the guess. Step 7 confirms which one is actually in use.
+
+Tell them to ignore the client secret: this connects as a public PKCE client and does not use one.
 
 Wait for the Client ID. It is not a secret, but do not write it to a file.
 
@@ -244,8 +249,10 @@ for a name ending in `__authenticate` for this server.
    Never hand-build this URL, and never use the sample URL from the Webex developer site — that one has a placeholder
    `state` and no `code_challenge`, so the local listener rejects the callback.
 2. **Check the URL before the user ever sees it**, and say what you checked:
-   - `redirect_uri` must be `http://127.0.0.1:<PORT>/callback` with the port from Step 4. Note it uses `127.0.0.1`,
-     so that exact spelling must be on the Integration.
+   - `redirect_uri` — read the host and port out of the URL rather than assuming either. The port must be the one
+     from Step 4, and the **exact** string, host included, must be registered on the Integration. Do not assert that
+     it will be `127.0.0.1`: it varies by version, which is why Step 5 registers both spellings. If the URL carries a
+     host the user has not registered, tell them the exact value to add.
    - `scope` must match the Step 2 string, with nothing extra.
 
    If either is wrong, **stop and fix it** rather than letting the user walk into the error. A port mismatch means
@@ -342,7 +349,8 @@ is registered, so an edit does nothing until a restart. Re-run Step 6 instead (`
 Three things must agree. Check all three rather than guessing:
 
 1. The Redirect URI on the Integration
-2. The host in the authorization URL — `127.0.0.1`, not `localhost`
+2. The host in the authorization URL — read it, do not assume. Whichever of `127.0.0.1` or `localhost` the URL uses
+   must be registered on the Integration verbatim
 3. The port the editor is listening on — re-run the Step 4 bind check, since something may have taken it since
 
 ### 403 or `insufficient_scope` from a tool

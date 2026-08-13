@@ -74,8 +74,9 @@ claude mcp remove webex-messaging
 
 1. **Control Hub**: a Webex administrator must enable the MCP server for your organization.
 2. **Create an Integration** at [developer.webex.com/my-apps](https://developer.webex.com/my-apps) with:
-   - Redirect URI `http://127.0.0.1:35621/callback` — note **`127.0.0.1`, not `localhost`**, because Webex
-     matches redirect URIs as exact strings
+   - Redirect URIs — register **both** `http://127.0.0.1:35621/callback` and `http://localhost:35621/callback`.
+     Webex matches redirect URIs as exact strings, and which host your editor uses varies by version; registering
+     both removes the guesswork
    - The scopes you want, which must include `spark:mcp`
 
 Then run `/mcp`, choose **webex**, and complete the browser sign-in.

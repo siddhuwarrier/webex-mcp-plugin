@@ -1,10 +1,9 @@
 #!/usr/bin/env node
 // PreToolUse guard for the Webex Messaging MCP server.
 //
-// It also appends the configured AI disclaimer to outgoing messages. That value
-// arrives as CLAUDE_PLUGIN_OPTION_WEBEX_DISCLAIMER — userConfig values are
-// exported to hook processes as environment variables, so no ${user_config.*}
-// substitution is needed (and shell-form commands reject it anyway).
+// It also appends the AI disclaimer, if one is configured, to outgoing messages.
+// The text lives in disclaimer.txt inside the plugin's data directory, written by
+// the setup wizard. Absent or empty means no disclaimer.
 //
 // Catches three calls that return success but produce the wrong outcome:
 //
@@ -97,10 +96,21 @@ function main(raw) {
   }
 }
 
+// Reads the disclaimer text, or '' when none is configured.
+function disclaimerText() {
+  const dir = process.env.CLAUDE_PLUGIN_DATA;
+  if (!dir) return '';
+  try {
+    return require('node:fs').readFileSync(require('node:path').join(dir, 'disclaimer.txt'), 'utf8').trim();
+  } catch {
+    return ''; // Not configured, or unreadable.
+  }
+}
+
 // Appends the configured disclaimer in italics on its own line. Idempotent, so a
 // retry or a body that already carries it is left alone.
 function appendDisclaimer(input) {
-  const text = (process.env.CLAUDE_PLUGIN_OPTION_WEBEX_DISCLAIMER || '').trim();
+  const text = disclaimerText();
   if (!text) return; // Disabled.
 
   // Prefer markdown, since that is what Webex renders when both are present.

@@ -88,8 +88,8 @@ Offer three options, defaulting to the first:
 | `Yes, but let me write it` | Same behaviour with your own wording. You will be asked for the text. |
 | `No disclaimer` | Messages go out with no added note. |
 
-If they want their own wording, ask for it in a follow-up turn and use it verbatim. If they decline, set
-`webex_disclaimer` to an empty string.
+If they want their own wording, ask for it in a follow-up turn and use it verbatim. If they decline, simply do not
+write the file in Step 5.
 
 ### Step 3: Which callback port?
 
@@ -150,26 +150,46 @@ secret: this connects as a public PKCE client and does not use one.
 
 Wait for the Client ID. It is not a secret, but do not write it to a file.
 
-### Step 5: Apply the configuration
+### Step 5: Register the server
 
-**If you have a shell and the plugin is not yet installed**, offer to run this for the user, and confirm before you do:
+This plugin does not define the MCP server itself, so nothing is configured until this step runs. Register it with
+the values gathered above — one command, and because it is a fresh registration the pinned scopes take effect
+immediately with no restart.
+
+**If you have a shell**, confirm with the user, then run:
 
 ```bash
-claude plugin install webex-messaging-mcp@webex-mcp-official \
-  --config webex_client_id=<CLIENT_ID> \
-  --config webex_callback_port=<PORT> \
-  --config "webex_scopes=<SCOPE STRING>" \
-  --config "webex_disclaimer=<DISCLAIMER TEXT>"
+claude mcp add-json webex '{
+  "type": "http",
+  "url": "https://mcp.webexapis.com/mcp/webex-messaging",
+  "oauth": {
+    "clientId": "<CLIENT_ID>",
+    "callbackPort": <PORT>,
+    "scopes": "<SCOPE STRING>"
+  }
+}' --scope user
 ```
 
-Pass `--config webex_disclaimer=` empty to disable it, or omit the flag to keep the default.
+`callbackPort` is a **number**, unquoted. `scopes` is a single space-separated string.
 
-**If the plugin is already installed**, the command-line path is unavailable — an installed plugin can only be
-reconfigured interactively. Tell the user to run `/plugin configure`, choose this plugin, and set the fields, and
-give them the exact values to paste for each one.
+Use `--scope user` so Webex is available in every project. Use `--scope project` only if the user explicitly wants it
+limited to the current repository.
 
-**If you have no shell**, present the values as a labelled list for the user to enter via `/plugin configure`, and
-wait for them to confirm.
+If a server named `webex` already exists, `claude mcp remove webex --scope user` first, then re-add — that is also
+how you change the port or scopes later.
+
+**If you have no shell**, present the command as a copyable block and wait for the user to confirm they ran it.
+
+Then write the disclaimer, if Step 2 chose one. It lives in a file the guard hook reads:
+
+```bash
+mkdir -p "$CLAUDE_PLUGIN_DATA" && cat > "$CLAUDE_PLUGIN_DATA/disclaimer.txt" <<'EOF'
+<DISCLAIMER TEXT>
+EOF
+```
+
+If the user declined a disclaimer, write nothing — an absent file means no disclaimer. If `CLAUDE_PLUGIN_DATA` is not
+set in your environment, the disclaimer cannot be stored; say so rather than silently skipping it, and continue.
 
 ### Step 6: Sign in, then verify
 
@@ -191,11 +211,12 @@ Live data back means it works. If they granted read-only access, do not test by 
 Setup gets interrupted. Before starting over, work out what is already done and continue from the first incomplete
 step. If you have a shell:
 
-1. `claude mcp list` — is a Webex server listed at all? Absent means the plugin is not installed or not enabled
-   (Step 5). `Needs authentication` means everything is configured and only sign-in is outstanding (Step 6).
-2. `claude plugin details webex-messaging-mcp` — is the plugin installed, and does it report its MCP server?
-3. Are `webex-*` tools already in your tool list? If so, configuration and sign-in both succeeded — go straight to
-   the Step 6 verification call, or to **Troubleshooting** if a specific tool is failing.
+1. `claude mcp list` — is a `webex` server listed? Absent means Step 5 has not run. `Needs authentication` means it
+   is registered and only the browser sign-in is outstanding (Step 6).
+2. `claude mcp get webex` — check the registered `clientId`, `callbackPort` and `scopes` against what the user wants.
+   A port or scope change means re-running Step 5, not editing the file by hand.
+3. Are `webex-*` tools already in your tool list? Then registration and sign-in both succeeded — go straight to the
+   Step 6 verification call, or to **Troubleshooting** if one specific tool is failing.
 
 Tell the user what you found rather than silently resuming — "Looks like the plugin is configured and just needs the
 browser sign-in, want me to pick up there?" — and continue from that point instead of redoing finished work.
@@ -206,17 +227,17 @@ With no shell, ask the user which of the steps they have already completed.
 
 ### `does not support dynamic client registration`
 
-The server will not register an OAuth client, so it needs a client ID. Either `webex_client_id` is empty, or the
-server was added manually without one.
+The server will not register an OAuth client, so it needs a client ID. The registration is missing one — check
+`claude mcp get webex`, and re-run Step 5 with the client ID from the user's Integration.
 
 ### `invalid_scope`
 
 The requested scopes are not all present on the Integration. Compare the two directly — the `scope` parameter in the
 authorization URL against the scope list at developer.webex.com/my-apps — and fix whichever is wrong.
 
-If the server was configured by hand rather than through this plugin, note that editing `oauth.scopes` in
-`~/.claude.json` mid-session has no effect: the OAuth config is read when the server is registered, so it needs a
-restart.
+Do not fix this by editing `oauth.scopes` in `~/.claude.json` mid-session — the OAuth config is read when the server
+is registered, so an edit does nothing until a restart. Re-run Step 5 instead (`claude mcp remove webex` then
+`add-json`), which takes effect immediately.
 
 ### The redirect fails, or the browser cannot connect
 
@@ -232,16 +253,16 @@ That tool needs a capability outside the granted set. The server exposes all 24 
 so this is the narrow grant working, not a broken setup. To widen it, do both, in this order:
 
 1. Add the scope to the Integration at developer.webex.com/my-apps
-2. Re-run this wizard from Step 1 so `webex_scopes` matches
+2. Re-run this wizard from Step 1 so the registered scope set matches
 
 ### Tools are missing entirely
 
 Run `claude mcp list`. `Needs authentication` means the client ID was accepted and only the browser sign-in is
-outstanding — run `/mcp`. If the server is absent, the plugin is not enabled.
+outstanding — run `/mcp`. If no `webex` server is listed at all, Step 5 has not run.
 
 ### Message bodies come back empty
 
-Add `spark:kms` to the Integration and to `webex_scopes`. It is not one of the 9 scopes the server lists as required,
+Add `spark:kms` to the Integration and to the registered scope set, then re-run Step 5. It is not one of the 9 scopes the server lists as required,
 but Webex uses it for end-to-end encrypted content, and without it some message bodies decrypt to nothing.
 
 ### Your organization blocks it
@@ -251,22 +272,23 @@ administrator to enable MCP access for the organization.
 
 ## Changing the disclaimer later
 
-The text lives in the `webex_disclaimer` plugin setting. Run `/plugin configure`, pick this plugin, and edit or clear
-that field — clearing it disables the append. No restart is needed; the hook reads the value on each call.
+The text lives in `disclaimer.txt` in the plugin's data directory (`$CLAUDE_PLUGIN_DATA`). Rewrite that file to change
+the wording, or delete it to stop appending anything. No restart is needed — the hook reads it on every call.
 
 ## Graceful degradation
 
-If the plugin's settings are not available in your host — no `webex_client_id` prompt, no `/plugin configure` — then
-this host does not support plugin user configuration. Do not try to reconstruct the setup by editing plugin files.
-Instead, have the user register the server directly with their own Integration's client ID:
+If `claude mcp add-json` is unavailable in the user's host, fall back to the flag form, which cannot pin scopes:
 
 ```bash
 claude mcp add --transport http --client-id <CLIENT_ID> --callback-port <PORT> \
   webex https://mcp.webexapis.com/mcp/webex-messaging
 ```
 
-Scope pinning then lives in `~/.claude.json` under `mcpServers.webex.oauth.scopes`, and requires a restart to take
-effect. Everything in **Troubleshooting** still applies.
+The server will then request whatever scope set it advertises, so the Integration must hold all of them or sign-in
+fails with `invalid_scope`. Say that plainly rather than leaving the user to discover it. Scopes can be pinned
+afterwards in `~/.claude.json` under `mcpServers.webex.oauth.scopes`, but that needs a restart to take effect.
+
+In a host with no shell at all, present the commands as copyable blocks and wait for confirmation at each step.
 
 ## Limitations
 

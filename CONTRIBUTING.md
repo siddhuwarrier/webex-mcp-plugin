@@ -49,16 +49,23 @@ Before opening a pull request that touches the plugin:
 
 1. **Validate the manifests.** Run `claude plugin validate ./plugins/webex-messaging-mcp` and confirm it reports no errors.
 2. **Test a real install.** Run `/plugin marketplace add <your-fork>` followed by `/plugin install webex-messaging-mcp@webex-mcp-official`,
-   and complete the OAuth flow against a Webex Integration you control.
+   then run the wizard end to end and complete the OAuth flow against a Webex Integration you control. Check that
+   installing prompts you for nothing.
 3. **Bump `version`** in `plugins/webex-messaging-mcp/.claude-plugin/plugin.json` using semantic versioning. Users are pinned to
    this string and only receive updates when it changes. Bump `.codex-plugin/plugin.json` to match — the two
    manifests are separate files and drift silently.
+
+**Do not add `userConfig` to the manifest.** Declaring any user configuration makes the host open its own
+configuration dialog when the plugin is enabled, which pre-empts the wizard: the user is asked for a Webex client ID
+before anything has told them how to obtain one, in a flat form that cannot offer a scope checklist. That is why this
+plugin ships no MCP server definition either — per-user values are gathered by the wizard and applied with
+`claude mcp add-json`, and the disclaimer lives in `$CLAUDE_PLUGIN_DATA/disclaimer.txt`.
 
 The plugin targets two agents from one tree, with a marketplace manifest for each:
 
 | Agent | Marketplace manifest | Plugin manifest | Hook config | Ships |
 | --- | --- | --- | --- | --- |
-| Claude Code | `.claude-plugin/marketplace.json` | `.claude-plugin/plugin.json` | `hooks/hooks.json` (exec form, `${CLAUDE_PLUGIN_ROOT}`) | Skill, MCP server, `userConfig`, guard hook |
+| Claude Code | `.claude-plugin/marketplace.json` | `.claude-plugin/plugin.json` | `hooks/hooks.json` (exec form, `${CLAUDE_PLUGIN_ROOT}`) | Skill, guard hook, disclaimer |
 | Codex | `.agents/plugins/marketplace.json` | `.codex-plugin/plugin.json` | `hooks.json` at plugin root (relative command) | Skill, guard hook |
 
 Both hook configs invoke the same `hooks/webex-guard.js`. They are separate files because the two agents differ in
@@ -66,14 +73,13 @@ where the config lives and how the command is resolved: Claude Code uses `hooks/
 `${CLAUDE_PLUGIN_ROOT}`, while Codex auto-discovers `hooks.json` at the plugin root and resolves relative paths from
 there. `${CLAUDE_PLUGIN_ROOT}` does not exist in Codex. **Change one, change the other.**
 
-Codex ships **no MCP server** deliberately: its manifest has no `userConfig`, and its `.mcp.json` accepts only `url`
-and `oauth_resource`, with no field for an OAuth client ID. Adding one would produce a server that cannot
-authenticate against Webex. Revisit if Codex gains client-ID configuration.
+Neither manifest defines an MCP server; the wizard registers it. On Codex the server is registered through Codex's
+own MCP configuration instead of `claude mcp add-json`.
 
 Two Codex-specific caveats, both untested against a live Codex install:
 
-- The disclaimer append is a no-op there. It reads `CLAUDE_PLUGIN_OPTION_WEBEX_DISCLAIMER`, which only Claude Code
-  sets, so the guard skips it and the three correctness rules still apply. That degradation is intentional.
+- The disclaimer append is a no-op there. It reads `$CLAUDE_PLUGIN_DATA/disclaimer.txt`, and Codex provides no such
+  directory, so the guard skips it while the three correctness rules still apply. That degradation is intentional.
 - The guard emits `updatedInput` without `permissionDecision`. Codex's documented modify form pairs `updatedInput`
   with `permissionDecision: "allow"`, but setting `allow` in Claude Code would auto-approve the call and suppress
   the user's confirmation prompt — unacceptable for a tool that posts messages. If Codex turns out to ignore a bare
@@ -101,12 +107,12 @@ Two properties to preserve:
 
 Two constraints are worth knowing before you change the OAuth configuration:
 
-- **`callbackPort` must stay stable.** Users register `http://127.0.0.1:<port>/callback` as the redirect URI in their own
-  Webex Integration. Changing the port silently breaks the sign-in for every existing user, who then has to edit their
-  Integration. Treat a port change as a breaking change.
-- **Widen `oauth.scopes` only when a tool needs it.** The pinned set is deliberately narrower than the nine scopes the
-  server advertises, so that installing the plugin cannot grant space deletion or membership changes. If you add a scope,
-  say which tool requires it in the pull request description.
+- **Keep the default callback port stable.** Users register `http://127.0.0.1:<port>/callback` as the redirect URI in
+  their own Webex Integration. Changing the default the wizard suggests means existing users who re-run it silently
+  register a mismatched URI. Treat it as a breaking change.
+- **Widen the default capability set only when a tool needs it.** It is deliberately narrower than the nine scopes the
+  server advertises, so that a default setup cannot grant space deletion or membership changes. If you add a scope to
+  the checklist, say which tool requires it in the pull request description.
 
 ## Other Ways to Contribute
 

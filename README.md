@@ -33,7 +33,7 @@ Add this repository as a marketplace, then install from it:
 /plugin install webex-messaging-mcp@webex-mcp-official
 ```
 
-Then ask your agent to *set up Webex* and the bundled wizard takes over.
+Nothing prompts you on install. Then ask your agent to *set up Webex*, and the wizard takes it from there.
 
 ### Codex
 
@@ -43,33 +43,32 @@ codex plugin marketplace add CiscoDevNet/webex-mcp-official
 
 Then open `/plugins` in the Codex CLI, select **Webex Messaging**, and install it.
 
-> **On Codex you connect the server yourself.** The Codex plugin manifest has no equivalent of Claude Code's
-> `userConfig`, and its `.mcp.json` accepts only `url` and `oauth_resource` — there is no field for an OAuth client
-> ID, callback port or scope pinning. Since the Webex server requires a client ID, Codex cannot connect it from the
-> manifest alone, so the plugin ships no MCP server there. Slack's official plugin ships the same way for the same
-> reason. You still get the setup wizard, the troubleshooting, and the correctness guard; the AI disclaimer is
-> Claude Code only, because it depends on `userConfig`.
-
-### What the Claude Code plugin configures for you
-
-| | |
-|---|---|
-| Server URL | `https://mcp.webexapis.com/mcp/webex-messaging` |
-| Callback port | Defaults to `35621` and is checked as bindable before you commit to it |
-| Scopes | Defaults to `spark:mcp spark:messages_read spark:messages_write spark:rooms_read`; the wizard offers all 9 as a checklist |
-| AI disclaimer | Appended in italics to every outgoing message; editable or removable |
+> **The AI disclaimer is Claude Code only**, because it is stored in the plugin's data directory, which Codex does
+> not provide. Setup, troubleshooting and the correctness guard all work on both.
 
 ### Guided setup
 
-Ask your agent to *set up Webex*, and the `webex-mcp-setup` wizard will:
+The plugin deliberately declares **no configuration form**. It ships a wizard instead, so the first thing you see is
+an explanation rather than an empty field asking for a client ID. Ask your agent to *set up Webex*, and it will:
 
-1. Offer the **9 scopes as a checklist**, grouped by capability, so you grant only what you need
-2. Offer an **AI disclaimer** for outgoing messages if you granted write access, defaulting to on
-3. **Test that the callback port can actually be bound** — on Windows, macOS or Linux — and pick another if not
-4. Hand you the exact **Redirect URI and scope list** to paste into your Webex Integration
-5. Write the configuration, then verify with a read-only call
+1. Explain what is being connected, and that it posts **as you**, not as a bot
+2. Offer the **capabilities as a checklist**, so you grant only what you need — nothing more is requested at sign-in
+3. Offer an **AI disclaimer** for outgoing messages, but only if you granted write access
+4. **Test that the callback port can actually be bound** — on Windows, macOS or Linux — and pick another if not
+5. Hand you the exact **Redirect URI and scope list** to paste into your Webex Integration
+6. Register the server with the port and scopes already pinned, then verify with a read-only call
 
-The same skill doubles as the troubleshooter for `invalid_scope`, redirect failures and 403s.
+One question at a time, and the same skill doubles as the troubleshooter for `invalid_scope`, redirect failures
+and 403s.
+
+### Removing it
+
+The wizard registers the Webex server, so it outlives the plugin. To remove everything:
+
+```bash
+claude plugin uninstall webex-messaging-mcp@webex-mcp-official
+claude mcp remove webex
+```
 
 ### Doing it by hand
 
@@ -83,10 +82,9 @@ Then run `/mcp`, choose **webex**, and complete the browser sign-in.
 
 ### Notes
 
-The default scope set deliberately excludes space deletion, membership changes, and webhook management. All 24
-tools are still exposed by the server, so the ones needing an omitted scope return **403** — that is the narrow
-grant working as intended. The bundled `webex-mcp-setup` skill covers widening scopes and the common sign-in
-failures.
+The default capability set deliberately excludes space deletion, membership changes and webhook management. All 24
+tools are still exposed by the server, so the ones needing an ungranted scope return **403** — that is the narrow
+grant working as intended, not a broken setup. The `webex-mcp-setup` skill covers widening it.
 
 The plugin also installs a `PreToolUse` guard that catches three calls which succeed while producing the wrong
 outcome. It runs in the harness, so it costs nothing in context:

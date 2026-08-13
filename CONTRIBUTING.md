@@ -42,16 +42,16 @@ As we follow semantic versioning, we may reserve breaking changes until the next
 
 ## Contributing to the Claude Code plugin
 
-The plugin lives in [`plugins/webex-messaging-mcp/`](/plugins/webex-messaging-mcp) and is published through the marketplace manifest at
+The plugin lives in [`plugins/webex/`](/plugins/webex) and is published through the marketplace manifest at
 [`.claude-plugin/marketplace.json`](/.claude-plugin/marketplace.json).
 
 Before opening a pull request that touches the plugin:
 
-1. **Validate the manifests.** Run `claude plugin validate ./plugins/webex-messaging-mcp` and confirm it reports no errors.
-2. **Test a real install.** Run `/plugin marketplace add <your-fork>` followed by `/plugin install webex-messaging-mcp@webex-mcp-official`,
+1. **Validate the manifests.** Run `claude plugin validate ./plugins/webex` and confirm it reports no errors.
+2. **Test a real install.** Run `/plugin marketplace add <your-fork>` followed by `/plugin install webex@webex-mcp-official`,
    then run the wizard end to end and complete the OAuth flow against a Webex Integration you control. Check that
    installing prompts you for nothing.
-3. **Bump `version`** in `plugins/webex-messaging-mcp/.claude-plugin/plugin.json` using semantic versioning. Users are pinned to
+3. **Bump `version`** in `plugins/webex/.claude-plugin/plugin.json` using semantic versioning. Users are pinned to
    this string and only receive updates when it changes. Bump `.codex-plugin/plugin.json` to match — the two
    manifests are separate files and drift silently.
 
@@ -85,13 +85,13 @@ Two Codex-specific caveats, both untested against a live Codex install:
   the user's confirmation prompt — unacceptable for a tool that posts messages. If Codex turns out to ignore a bare
   `updatedInput`, fix it by emitting `allow` **only** for `webex-search-spaces`, which is read-only.
 
-If you change the guard hook in [`hooks/`](/plugins/webex-messaging-mcp/hooks), exercise it directly rather than
+If you change the guard hook in [`hooks/`](/plugins/webex/hooks), exercise it directly rather than
 only through a live session — it takes the `PreToolUse` payload on stdin:
 
 ```bash
 printf '%s' '{"tool_name":"mcp__webex-messaging__webex-create-message",
               "tool_input":{"roomId":"R1","markdown":"hi &lt;@personId:ABC&gt;"}}' \
-  | node ./plugins/webex-messaging-mcp/hooks/webex-guard.js
+  | node ./plugins/webex/hooks/webex-guard.js
 ```
 
 Cover both outcomes for each rule — the call it should refuse, and a legitimate call it must leave alone. Include

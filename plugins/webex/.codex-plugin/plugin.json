@@ -1,0 +1,28 @@
+{
+  "name": "webex",
+  "version": "0.2.0",
+  "description": "Guided setup and troubleshooting for Cisco's hosted Webex MCP servers.",
+  "author": {
+    "name": "Cisco DevNet",
+    "url": "https://developer.webex.com"
+  },
+  "homepage": "https://developer.webex.com/mcp/docs/messaging-mcp-server",
+  "repository": "https://github.com/CiscoDevNet/webex-mcp-official",
+  "license": "Apache-2.0",
+  "skills": "./skills/",
+  "mcpServers": {},
+  "interface": {
+    "displayName": "Webex",
+    "shortDescription": "Set up and troubleshoot the Webex MCP servers",
+    "longDescription": "Walks you through connecting to Cisco's hosted Webex MCP servers: choosing which servers to connect, which scopes to grant, verifying the OAuth callback port is bindable, registering the Integration with the right redirect URI, and diagnosing invalid_scope, redirect and 403 failures.",
+    "defaultPrompt": "Help me set up the Webex MCP servers.",
+    "developerName": "Cisco DevNet",
+    "category": "Communication",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://developer.webex.com/mcp/docs/messaging-mcp-server"
+  }
+}

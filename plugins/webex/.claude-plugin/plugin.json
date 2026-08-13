@@ -1,8 +1,8 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
-  "name": "webex-messaging-mcp",
-  "displayName": "Webex Messaging",
-  "description": "Guided setup for Cisco's hosted Webex Messaging MCP server, plus guards against calls that silently do the wrong thing.",
+  "name": "webex",
+  "displayName": "Webex",
+  "description": "Guided setup for Cisco's hosted Webex MCP servers, plus guards against calls that silently do the wrong thing.",
   "version": "0.2.0",
   "author": {
     "name": "Cisco DevNet",
@@ -11,5 +11,11 @@
   "homepage": "https://developer.webex.com/mcp/docs/messaging-mcp-server",
   "repository": "https://github.com/CiscoDevNet/webex-mcp-official",
   "license": "Apache-2.0",
-  "keywords": ["webex", "cisco", "messaging", "mcp", "collaboration"]
+  "keywords": [
+    "webex",
+    "cisco",
+    "messaging",
+    "mcp",
+    "collaboration"
+  ]
 }

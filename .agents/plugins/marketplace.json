@@ -5,10 +5,10 @@
   },
   "plugins": [
     {
-      "name": "webex-messaging-mcp",
+      "name": "webex",
       "source": {
         "source": "local",
-        "path": "./plugins/webex-messaging-mcp"
+        "path": "./plugins/webex"
       },
       "policy": {
         "installation": "AVAILABLE",

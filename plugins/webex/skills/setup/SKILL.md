@@ -1,5 +1,5 @@
 ---
-name: webex-mcp-setup
+name: setup
 description: |
   Guide a user through connecting Cisco's hosted Webex Messaging MCP server end to end — choose which Webex
   capabilities to grant, settle a callback port, register a Webex Integration, apply the configuration, sign in,
@@ -14,9 +14,10 @@ description: |
 
 # Webex Messaging MCP setup
 
-You help a user connect their editor to Cisco's **hosted** Webex Messaging MCP server
-(`https://mcp.webexapis.com/mcp/webex-messaging`) from nothing, conversationally and end to end. Nothing is
-self-hosted and there is no bot token: it authenticates as the user over OAuth 2.0.
+You help a user connect their editor to Cisco's **hosted** Webex MCP servers from nothing, conversationally and end
+to end. Nothing is self-hosted and there is no bot token: they authenticate as the user over OAuth 2.0.
+
+Three servers exist — Messaging, Meetings and Vidcast. **This skill currently covers Messaging.**
 
 Two settings must agree between the user's Webex Integration and this plugin — the **callback port** and the
 **scopes**. Each mismatch produces an error that does not name its cause, which is what this wizard exists to
@@ -50,7 +51,31 @@ Before the first question, tell the user in about four lines:
 
 Then go straight into Step 1. Do not ask permission to begin.
 
-### Step 1: Which capabilities?
+### Step 1: Which Webex servers?
+
+Webex exposes three separate hosted MCP servers. They are genuinely separate: different endpoints, and scope sets
+that share only `spark:mcp`. Each needs its own registration and its own browser sign-in.
+
+Explain that, then ask which they want as a **multi-select checklist**, preselecting *Messaging*:
+
+| Option label | Description to show | Endpoint |
+| --- | --- | --- |
+| `Messaging` | Read, search and post messages, spaces and threads. | `https://mcp.webexapis.com/mcp/webex-messaging` |
+| `Meetings` | Schedule and list meetings, and read recordings, transcripts and summaries. | `https://mcp.webexapis.com/mcp/webex-meeting` |
+| `Vidcast` | Video posts and their transcripts. | `https://mcp.webexapis.com/mcp/vidcast` |
+
+**Only Messaging is supported by this wizard today.** If the user picks Meetings or Vidcast, say so plainly rather
+than pretending — point them at the scope tables in the repository README and offer to register the server for them
+with the full scope string documented there, using the same Integration, port and `add-json` command shape as the
+Messaging path. Do not invent capability checklists for servers this skill has not been extended to cover.
+
+The good news to tell them: **one Webex Integration serves all three.** Scopes are additive on the app registration,
+so the Integration created in this run can hold the scopes for servers they add later, reusing the same client ID,
+redirect URI and port. Only the registration and sign-in are per-server.
+
+The remaining steps assume Messaging. Run them once per selected server if that changes.
+
+### Step 2: Which capabilities?
 
 Explain that Webex grants access per capability, that the choice can be widened later, and that anything not granted
 returns a 403 rather than failing silently.
@@ -73,9 +98,9 @@ confirm which they meant.
 Build one space-separated scope string from the selections, always starting with `spark:mcp`, which the server
 requires. Show the user the final string and say it is what will be requested at sign-in.
 
-### Step 2: AI disclaimer?
+### Step 3: AI disclaimer?
 
-**Skip this step entirely if Step 1 granted no write scope.** Nothing is ever posted, so the question is noise.
+**Skip this step entirely if Step 2 granted no write scope.** Nothing is ever posted, so the question is noise.
 
 Explain that outgoing messages can carry an automatic note saying they were AI-generated, appended in italics on its
 own line, applied by a hook so it cannot be forgotten or talked around.
@@ -89,9 +114,9 @@ Offer three options, defaulting to the first:
 | `No disclaimer` | Messages go out with no added note. |
 
 If they want their own wording, ask for it in a follow-up turn and use it verbatim. If they decline, simply do not
-write the file in Step 5.
+write the file in Step 6.
 
-### Step 3: Which callback port?
+### Step 4: Which callback port?
 
 Explain that sign-in briefly runs a local listener, that the port must match what they register with Webex, and that
 a port already in use fails at the redirect with an error that looks like a Webex problem.
@@ -132,7 +157,7 @@ continuing. Do not assume 35621 is free.
 Say once that this is a pre-flight, not a reservation: if the redirect fails later, come back and re-test. Ports
 below 1024 need administrator rights and will not work.
 
-### Step 4: Register the Integration on the Webex site
+### Step 5: Register the Integration on the Webex site
 
 This step cannot be automated — it needs a human signed in to Webex. Give them the values already filled in, with
 nothing left to work out:
@@ -140,7 +165,7 @@ nothing left to work out:
 > Go to **[developer.webex.com/my-apps](https://developer.webex.com/my-apps) → Create a New App → Integration**
 >
 > - **Redirect URI:** `http://127.0.0.1:<PORT>/callback`
-> - **Scopes:** tick exactly these — `<THE SCOPE LIST FROM STEP 1>`
+> - **Scopes:** tick exactly these — `<THE SCOPE LIST FROM STEP 2>`
 >
 > Then copy the **Client ID** and paste it back here.
 
@@ -150,7 +175,7 @@ secret: this connects as a public PKCE client and does not use one.
 
 Wait for the Client ID. It is not a secret, but do not write it to a file.
 
-### Step 5: Register the server
+### Step 6: Register the server
 
 This plugin does not define the MCP server itself, so nothing is configured until this step runs. Register it with
 the values gathered above — one command, and because it is a fresh registration the pinned scopes take effect
@@ -159,7 +184,7 @@ immediately with no restart.
 **If you have a shell**, confirm with the user, then run:
 
 ```bash
-claude mcp add-json webex '{
+claude mcp add-json webex-messaging '{
   "type": "http",
   "url": "https://mcp.webexapis.com/mcp/webex-messaging",
   "oauth": {
@@ -175,12 +200,12 @@ claude mcp add-json webex '{
 Use `--scope user` so Webex is available in every project. Use `--scope project` only if the user explicitly wants it
 limited to the current repository.
 
-If a server named `webex` already exists, `claude mcp remove webex --scope user` first, then re-add — that is also
+If a server named `webex-messaging` already exists, `claude mcp remove webex-messaging --scope user` first, then re-add — that is also
 how you change the port or scopes later.
 
 **If you have no shell**, present the command as a copyable block and wait for the user to confirm they ran it.
 
-Then write the disclaimer, if Step 2 chose one. It lives in a file the guard hook reads:
+Then write the disclaimer, if Step 3 chose one. It lives in a file the guard hook reads:
 
 ```bash
 mkdir -p "$CLAUDE_PLUGIN_DATA" && cat > "$CLAUDE_PLUGIN_DATA/disclaimer.txt" <<'EOF'
@@ -191,12 +216,12 @@ EOF
 If the user declined a disclaimer, write nothing — an absent file means no disclaimer. If `CLAUDE_PLUGIN_DATA` is not
 set in your environment, the disclaimer cannot be stored; say so rather than silently skipping it, and continue.
 
-### Step 6: Sign in, then verify
+### Step 7: Sign in, then verify
 
-Tell the user to run `/mcp`, choose **webex**, and complete the browser sign-in.
+Tell the user to run `/mcp`, choose **webex-messaging**, and complete the browser sign-in.
 
 Before they click through, it is worth checking the authorization URL matches what was set up — `redirect_uri` should
-carry the port from Step 3, and `scope` should list what Step 1 selected and nothing more.
+carry the port from Step 4, and `scope` should list what Step 2 selected and nothing more.
 
 Then verify with a read-only call rather than declaring success:
 
@@ -211,12 +236,12 @@ Live data back means it works. If they granted read-only access, do not test by 
 Setup gets interrupted. Before starting over, work out what is already done and continue from the first incomplete
 step. If you have a shell:
 
-1. `claude mcp list` — is a `webex` server listed? Absent means Step 5 has not run. `Needs authentication` means it
-   is registered and only the browser sign-in is outstanding (Step 6).
-2. `claude mcp get webex` — check the registered `clientId`, `callbackPort` and `scopes` against what the user wants.
-   A port or scope change means re-running Step 5, not editing the file by hand.
+1. `claude mcp list` — is a `webex-messaging` server listed? Absent means Step 6 has not run. `Needs authentication` means it
+   is registered and only the browser sign-in is outstanding (Step 7).
+2. `claude mcp get webex-messaging` — check the registered `clientId`, `callbackPort` and `scopes` against what the user wants.
+   A port or scope change means re-running Step 6, not editing the file by hand.
 3. Are `webex-*` tools already in your tool list? Then registration and sign-in both succeeded — go straight to the
-   Step 6 verification call, or to **Troubleshooting** if one specific tool is failing.
+   Step 7 verification call, or to **Troubleshooting** if one specific tool is failing.
 
 Tell the user what you found rather than silently resuming — "Looks like the plugin is configured and just needs the
 browser sign-in, want me to pick up there?" — and continue from that point instead of redoing finished work.
@@ -228,7 +253,7 @@ With no shell, ask the user which of the steps they have already completed.
 ### `does not support dynamic client registration`
 
 The server will not register an OAuth client, so it needs a client ID. The registration is missing one — check
-`claude mcp get webex`, and re-run Step 5 with the client ID from the user's Integration.
+`claude mcp get webex-messaging`, and re-run Step 6 with the client ID from the user's Integration.
 
 ### `invalid_scope`
 
@@ -236,7 +261,7 @@ The requested scopes are not all present on the Integration. Compare the two dir
 authorization URL against the scope list at developer.webex.com/my-apps — and fix whichever is wrong.
 
 Do not fix this by editing `oauth.scopes` in `~/.claude.json` mid-session — the OAuth config is read when the server
-is registered, so an edit does nothing until a restart. Re-run Step 5 instead (`claude mcp remove webex` then
+is registered, so an edit does nothing until a restart. Re-run Step 6 instead (`claude mcp remove webex-messaging` then
 `add-json`), which takes effect immediately.
 
 ### The redirect fails, or the browser cannot connect
@@ -245,7 +270,7 @@ Three things must agree. Check all three rather than guessing:
 
 1. The Redirect URI on the Integration
 2. The host in the authorization URL — `127.0.0.1`, not `localhost`
-3. The port the editor is listening on — re-run the Step 3 bind check, since something may have taken it since
+3. The port the editor is listening on — re-run the Step 4 bind check, since something may have taken it since
 
 ### 403 or `insufficient_scope` from a tool
 
@@ -253,16 +278,16 @@ That tool needs a capability outside the granted set. The server exposes all 24 
 so this is the narrow grant working, not a broken setup. To widen it, do both, in this order:
 
 1. Add the scope to the Integration at developer.webex.com/my-apps
-2. Re-run this wizard from Step 1 so the registered scope set matches
+2. Re-run this wizard from Step 2 so the registered scope set matches
 
 ### Tools are missing entirely
 
 Run `claude mcp list`. `Needs authentication` means the client ID was accepted and only the browser sign-in is
-outstanding — run `/mcp`. If no `webex` server is listed at all, Step 5 has not run.
+outstanding — run `/mcp`. If no `webex-messaging` server is listed at all, Step 6 has not run.
 
 ### Message bodies come back empty
 
-Add `spark:kms` to the Integration and to the registered scope set, then re-run Step 5. It is not one of the 9 scopes the server lists as required,
+Add `spark:kms` to the Integration and to the registered scope set, then re-run Step 6. It is not one of the 9 scopes the server lists as required,
 but Webex uses it for end-to-end encrypted content, and without it some message bodies decrypt to nothing.
 
 ### Your organization blocks it
@@ -281,18 +306,18 @@ If `claude mcp add-json` is unavailable in the user's host, fall back to the fla
 
 ```bash
 claude mcp add --transport http --client-id <CLIENT_ID> --callback-port <PORT> \
-  webex https://mcp.webexapis.com/mcp/webex-messaging
+  webex-messaging https://mcp.webexapis.com/mcp/webex-messaging
 ```
 
 The server will then request whatever scope set it advertises, so the Integration must hold all of them or sign-in
 fails with `invalid_scope`. Say that plainly rather than leaving the user to discover it. Scopes can be pinned
-afterwards in `~/.claude.json` under `mcpServers.webex.oauth.scopes`, but that needs a restart to take effect.
+afterwards in `~/.claude.json` under `mcpServers.webex-messaging.oauth.scopes`, but that needs a restart to take effect.
 
 In a host with no shell at all, present the commands as copyable blocks and wait for confirmation at each step.
 
 ## Limitations
 
-- **Creating the Webex Integration cannot be automated.** It needs a human signed in to Webex, so Step 4 is always
+- **Creating the Webex Integration cannot be automated.** It needs a human signed in to Webex, so Step 5 is always
   manual.
 - **Control Hub enablement is out of reach.** If an administrator has not enabled MCP access for the organization,
   sign-in can succeed while every call is refused, and only an administrator can fix it.

@@ -30,7 +30,7 @@ Add this repository as a marketplace, then install from it:
 
 ```
 /plugin marketplace add CiscoDevNet/webex-mcp-official
-/plugin install webex-messaging-mcp@webex-mcp-official
+/plugin install webex@webex-mcp-official
 ```
 
 Nothing prompts you on install. Then ask your agent to *set up Webex*, and the wizard takes it from there.
@@ -41,7 +41,7 @@ Nothing prompts you on install. Then ask your agent to *set up Webex*, and the w
 codex plugin marketplace add CiscoDevNet/webex-mcp-official
 ```
 
-Then open `/plugins` in the Codex CLI, select **Webex Messaging**, and install it.
+Then open `/plugins` in the Codex CLI, select **Webex**, and install it.
 
 > **The AI disclaimer is Claude Code only**, because it is stored in the plugin's data directory, which Codex does
 > not provide. Setup, troubleshooting and the correctness guard all work on both.
@@ -66,8 +66,8 @@ and 403s.
 The wizard registers the Webex server, so it outlives the plugin. To remove everything:
 
 ```bash
-claude plugin uninstall webex-messaging-mcp@webex-mcp-official
-claude mcp remove webex
+claude plugin uninstall webex@webex-mcp-official
+claude mcp remove webex-messaging
 ```
 
 ### Doing it by hand
@@ -84,7 +84,7 @@ Then run `/mcp`, choose **webex**, and complete the browser sign-in.
 
 The default capability set deliberately excludes space deletion, membership changes and webhook management. All 24
 tools are still exposed by the server, so the ones needing an ungranted scope return **403** — that is the narrow
-grant working as intended, not a broken setup. The `webex-mcp-setup` skill covers widening it.
+grant working as intended, not a broken setup. The `/webex:setup` command covers widening it.
 
 The plugin also installs a `PreToolUse` guard that catches three calls which succeed while producing the wrong
 outcome. It runs in the harness, so it costs nothing in context:

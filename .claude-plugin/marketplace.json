@@ -8,12 +8,18 @@
   },
   "plugins": [
     {
-      "name": "webex-messaging-mcp",
-      "source": "./plugins/webex-messaging-mcp",
-      "displayName": "Webex Messaging",
-      "description": "Read, search, and post Webex messages from your editor via Cisco's hosted Webex Messaging MCP server.",
+      "name": "webex",
+      "source": "./plugins/webex",
+      "displayName": "Webex",
+      "description": "Connect Cisco's hosted Webex MCP servers from your editor. Guided setup that handles the OAuth details that are easy to get wrong.",
       "category": "productivity",
-      "tags": ["webex", "cisco", "messaging", "mcp", "collaboration"]
+      "tags": [
+        "webex",
+        "cisco",
+        "messaging",
+        "mcp",
+        "collaboration"
+      ]
     }
   ]
 }

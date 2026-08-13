@@ -1,9 +1,9 @@
 ---
 name: setup
 description: |
-  Guide a user through connecting Cisco's hosted Webex Messaging MCP server end to end — choose which Webex
-  capabilities to grant, settle a callback port, register a Webex Integration, apply the configuration, sign in,
-  and verify. Also the troubleshooter for a connection that fails or a tool that returns 403.
+  Guide a user through connecting Cisco's hosted Webex MCP servers end to end — choose which servers and which
+  capabilities to grant, settle a callback port, register a Webex Integration, register the servers, sign in, and
+  verify. Also the troubleshooter for a connection that fails or a tool that returns 403.
   TRIGGER when: the user is setting up Webex for the first time, just installed the plugin, says "set up webex",
   "connect webex", "get me started with webex"; wants to change which Webex capabilities are granted or the OAuth
   callback port; Webex tools are missing; sign-in fails; or an error mentions dynamic client registration,
@@ -12,7 +12,7 @@ description: |
   webex-* tools directly instead.
 ---
 
-# Webex Messaging MCP setup
+# Webex MCP setup
 
 You help a user connect their editor to Cisco's **hosted** Webex MCP servers from nothing, conversationally and end
 to end. Nothing is self-hosted and there is no bot token: they authenticate as the user over OAuth 2.0.
@@ -43,8 +43,7 @@ If the user is returning to a half-finished setup, read **Resuming a partial set
 
 Before the first question, tell the user in about four lines:
 
-- This connects their editor to Cisco's hosted Webex Messaging MCP server, so they can read, search and post Webex
-  messages without opening Webex.
+- This connects their editor to Cisco's hosted Webex MCP servers, so they can work with Webex without opening it.
 - It acts **as them**, not as a bot. Anything posted appears under their own name.
 - They will need a browser, and a Webex organization where an administrator has enabled MCP access.
 - It takes about five minutes, and one step happens on the Webex developer site.
@@ -205,16 +204,30 @@ how you change the port or scopes later.
 
 **If you have no shell**, present the command as a copyable block and wait for the user to confirm they ran it.
 
-Then write the disclaimer, if Step 3 chose one. It lives in a file the guard hook reads:
+Then write the disclaimer, if Step 3 chose one. It goes in a fixed location the guard hook reads:
+
+macOS or Linux:
 
 ```bash
-mkdir -p "$CLAUDE_PLUGIN_DATA" && cat > "$CLAUDE_PLUGIN_DATA/disclaimer.txt" <<'EOF'
+mkdir -p ~/.claude/webex-mcp && cat > ~/.claude/webex-mcp/disclaimer.txt <<'EOF'
 <DISCLAIMER TEXT>
 EOF
 ```
 
-If the user declined a disclaimer, write nothing — an absent file means no disclaimer. If `CLAUDE_PLUGIN_DATA` is not
-set in your environment, the disclaimer cannot be stored; say so rather than silently skipping it, and continue.
+Windows (PowerShell):
+
+```powershell
+New-Item -ItemType Directory -Force -Path "$HOME\.claude\webex-mcp" | Out-Null
+Set-Content -Path "$HOME\.claude\webex-mcp\disclaimer.txt" -Value '<DISCLAIMER TEXT>'
+```
+
+**Use this literal path. Do not use `$CLAUDE_PLUGIN_DATA`** — it is set for hook processes but not for your shell, so
+it expands to nothing and the file lands somewhere the hook will never look. Do not try to reconstruct the plugin's
+data directory either.
+
+Read the file back and show the user what it contains, so a silent write failure cannot pass for success.
+
+If the user declined a disclaimer, write nothing — an absent file means no disclaimer.
 
 ### Step 7: Sign in, then verify
 
@@ -297,8 +310,8 @@ administrator to enable MCP access for the organization.
 
 ## Changing the disclaimer later
 
-The text lives in `disclaimer.txt` in the plugin's data directory (`$CLAUDE_PLUGIN_DATA`). Rewrite that file to change
-the wording, or delete it to stop appending anything. No restart is needed — the hook reads it on every call.
+The text lives in `~/.claude/webex-mcp/disclaimer.txt`. Rewrite that file to change the wording, or delete it to stop
+appending anything. No restart is needed — the hook reads it on every call.
 
 ## Graceful degradation
 

@@ -97,14 +97,30 @@ function main(raw) {
 }
 
 // Reads the disclaimer text, or '' when none is configured.
+//
+// Two locations, in order. CLAUDE_PLUGIN_DATA is set for hook processes but not
+// for the agent's own shell, so whatever writes the file cannot rely on it; the
+// fixed path below is the one the setup wizard uses, and needs no guessing.
 function disclaimerText() {
-  const dir = process.env.CLAUDE_PLUGIN_DATA;
-  if (!dir) return '';
-  try {
-    return require('node:fs').readFileSync(require('node:path').join(dir, 'disclaimer.txt'), 'utf8').trim();
-  } catch {
-    return ''; // Not configured, or unreadable.
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const os = require('node:os');
+
+  const candidates = [];
+  if (process.env.CLAUDE_PLUGIN_DATA) {
+    candidates.push(path.join(process.env.CLAUDE_PLUGIN_DATA, 'disclaimer.txt'));
   }
+  candidates.push(path.join(os.homedir(), '.claude', 'webex-mcp', 'disclaimer.txt'));
+
+  for (const file of candidates) {
+    try {
+      const text = fs.readFileSync(file, 'utf8').trim();
+      if (text) return text;
+    } catch {
+      // Missing or unreadable: try the next one.
+    }
+  }
+  return '';
 }
 
 // Appends the configured disclaimer in italics on its own line. Idempotent, so a

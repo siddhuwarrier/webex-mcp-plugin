@@ -59,7 +59,7 @@ Before opening a pull request that touches the plugin:
 configuration dialog when the plugin is enabled, which pre-empts the wizard: the user is asked for a Webex client ID
 before anything has told them how to obtain one, in a flat form that cannot offer a scope checklist. That is why this
 plugin ships no MCP server definition either — per-user values are gathered by the wizard and applied with
-`claude mcp add-json`, and the disclaimer lives in `$CLAUDE_PLUGIN_DATA/disclaimer.txt`.
+`claude mcp add-json`, and the disclaimer lives in `~/.claude/webex-mcp/disclaimer.txt`.
 
 The plugin targets two agents from one tree, with a marketplace manifest for each:
 
@@ -78,8 +78,14 @@ own MCP configuration instead of `claude mcp add-json`.
 
 Two Codex-specific caveats, both untested against a live Codex install:
 
-- The disclaimer append is a no-op there. It reads `$CLAUDE_PLUGIN_DATA/disclaimer.txt`, and Codex provides no such
-  directory, so the guard skips it while the three correctness rules still apply. That degradation is intentional.
+- The disclaimer is untested there. The guard looks in `$CLAUDE_PLUGIN_DATA/disclaimer.txt` first and then falls back
+  to `~/.claude/webex-mcp/disclaimer.txt`, so it would work if a Codex user wrote that file, but the wizard does not
+  offer the step. The three correctness rules apply regardless.
+
+The two-location lookup is deliberate. `CLAUDE_PLUGIN_DATA` is exported to hook processes but **not** to the agent's
+own shell, so whatever writes the file cannot expand it — and the documented sanitisation of the plugin id into a
+directory name is not something to reconstruct by hand. The wizard writes the fixed `~/.claude/webex-mcp` path; the
+data directory is still honoured first for anyone who prefers it.
 - The guard emits `updatedInput` without `permissionDecision`. Codex's documented modify form pairs `updatedInput`
   with `permissionDecision: "allow"`, but setting `allow` in Claude Code would auto-approve the call and suppress
   the user's confirmation prompt — unacceptable for a tool that posts messages. If Codex turns out to ignore a bare

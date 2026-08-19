@@ -1,2 +1,8 @@
 # Local, per-developer Claude Code settings (permissions, enabled plugins)
 .claude/settings.local.json
+
+# The OpenCode guard plugin ships with this repo. Some contributors globally
+# ignore .opencode/; make sure the shipped plugin is still tracked here.
+!.opencode/
+!.opencode/plugin/
+!.opencode/plugin/webex-guard.js

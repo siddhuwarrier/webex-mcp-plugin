@@ -49,6 +49,40 @@ Then open `/plugins` in the Codex CLI, select **Webex**, and install it.
 > **The AI disclaimer is Claude Code only**, because it is stored in the plugin's data directory, which Codex does
 > not provide. Setup, troubleshooting and the correctness guard all work on both.
 
+### OpenCode
+
+OpenCode has no plugin marketplace and does not use `claude mcp add-json`; it declares MCP servers in
+`opencode.json` and handles OAuth itself. This repository ships the OpenCode equivalents:
+
+- a setup skill at `.agents/skills/webex-setup/SKILL.md`, discovered automatically by OpenCode from `.agents/skills/`
+- a guard plugin at `.opencode/plugin/webex-guard.js`, the `tool.execute.before` version of the correctness guard
+  and AI disclaimer
+
+To install, copy both into your OpenCode config (globally, so Webex works in every project):
+
+```bash
+mkdir -p ~/.config/opencode/skills/webex-setup ~/.config/opencode/plugin
+cp .agents/skills/webex-setup/SKILL.md ~/.config/opencode/skills/webex-setup/SKILL.md
+cp .opencode/plugin/webex-guard.js    ~/.config/opencode/plugin/webex-guard.js
+```
+
+Then ask your agent to *set up Webex* and the skill takes it from there — it writes the `mcp` entries into
+`opencode.json`, walks you through the Webex Integration, and runs `opencode mcp auth` per server. Unlike Claude
+Code, the **AI disclaimer works on OpenCode** (stored at `~/.config/opencode/webex-mcp/disclaimer.txt`), as does the
+guard, as long as `node` is on your `PATH`.
+
+Two OpenCode-specific differences to know up front:
+
+- **The OAuth callback must be pinned.** OpenCode otherwise uses a random loopback port and the redirect path
+  `/mcp/oauth/callback` (not `/callback`), which cannot be pre-registered on Webex. The skill sets
+  `oauth.callbackPort` and `oauth.redirectUri` so the redirect URI is stable — register that exact value
+  (`http://127.0.0.1:<PORT>/mcp/oauth/callback`) on the Integration.
+- **Scopes cannot be narrowed.** The Webex MCP servers advertise their full scope set as `required_scopes`, and
+  OpenCode requests exactly that regardless of `oauth.scope`. So the per-capability grant Claude Code offers is
+  not available here: you grant the server's full scope set or sign-in fails with `invalid_scope`. The guard
+  plugin — not scope narrowing — is what keeps the dangerous calls (escaped mentions, mis-threaded replies,
+  unbounded space searches) in check.
+
 ### Guided setup
 
 The plugin deliberately declares **no configuration form**. It ships a wizard instead, so the first thing you see is
@@ -77,6 +111,11 @@ claude plugin uninstall webex@webex-mcp-official
 claude mcp remove webex-messaging
 claude mcp remove webex-meeting     # if you connected Meetings
 ```
+
+On **OpenCode**, delete the `webex-messaging` / `webex-meeting` entries from the `mcp` block in your
+`opencode.json`, drop the stored tokens with `opencode mcp logout webex-messaging` (and `webex-meeting`), and remove
+`~/.config/opencode/skills/webex-setup/` and `~/.config/opencode/plugin/webex-guard.js` if you no longer want the
+skill and guard.
 
 ### Doing it by hand
 

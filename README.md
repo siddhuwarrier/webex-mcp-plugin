@@ -71,6 +71,18 @@ Then ask your agent to *set up Webex* and the skill takes it from there — it w
 Code, the **AI disclaimer works on OpenCode** (stored at `~/.config/opencode/webex-mcp/disclaimer.txt`), as does the
 guard, as long as `node` is on your `PATH`.
 
+Two OpenCode-specific differences to know up front:
+
+- **The OAuth callback must be pinned.** OpenCode otherwise uses a random loopback port and the redirect path
+  `/mcp/oauth/callback` (not `/callback`), which cannot be pre-registered on Webex. The skill sets
+  `oauth.callbackPort` and `oauth.redirectUri` so the redirect URI is stable — register that exact value
+  (`http://127.0.0.1:<PORT>/mcp/oauth/callback`) on the Integration.
+- **Scopes cannot be narrowed.** The Webex MCP servers advertise their full scope set as `required_scopes`, and
+  OpenCode requests exactly that regardless of `oauth.scope`. So the per-capability grant Claude Code offers is
+  not available here: you grant the server's full scope set or sign-in fails with `invalid_scope`. The guard
+  plugin — not scope narrowing — is what keeps the dangerous calls (escaped mentions, mis-threaded replies,
+  unbounded space searches) in check.
+
 ### Guided setup
 
 The plugin deliberately declares **no configuration form**. It ships a wizard instead, so the first thing you see is

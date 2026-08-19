@@ -87,58 +87,59 @@ and its scopes cannot be narrowed. If the user asks for it by name, say that and
 
 ### Step 2: Which capabilities?
 
-Ask once per server chosen in Step 1 — Messaging first, then Meetings — as separate questions in separate
-turns. Say once that anything not granted returns a 403 rather than failing silently, and can be widened later.
+**Important OpenCode limitation.** Unlike Claude Code, OpenCode does **not** honour a narrowed `oauth.scope`
+for these servers. The Webex MCP servers advertise their full scope set as `required_scopes` in their
+`.well-known/oauth-protected-resource` metadata, and OpenCode requests exactly that set — it overrides whatever
+you put in `oauth.scope`. So per-capability selection is not possible here: to connect at all, the Integration
+must hold **every** scope the chosen server requires, and sign-in fails with `invalid_scope` otherwise.
 
-#### Messaging
+Because of that, do **not** offer a capabilities checklist on OpenCode. Instead, tell the user plainly which
+full scope set each chosen server needs, and that the guard plugin — not scope narrowing — is what keeps the
+dangerous calls in check.
 
-Offer these four options as a multi-select, preselecting *Read and post messages*:
+The full required scope set per server (from the server metadata, verified against
+`https://mcp.webexapis.com/.well-known/oauth-protected-resource/mcp/<server>`):
 
-| Option label | Description to show | Scopes it contributes |
-| --- | --- | --- |
-| `Read and post messages` | Read, search and post messages, reply in threads, and list spaces. Posts appear as you. | `spark:messages_read` `spark:messages_write` `spark:rooms_read` |
-| `Read messages only` | Read and search messages and spaces, with no ability to post or edit anything. | `spark:messages_read` `spark:rooms_read` |
-| `Create and delete spaces` | Create, rename and delete Webex spaces. Deleting a space cannot be undone. | `spark:rooms_write` |
-| `Manage space membership` | See who is in a space, and add or remove people. | `spark:memberships_read` `spark:memberships_write` |
+#### Messaging (all required)
 
-Webhook scopes (`spark:webhooks_read`, `spark:webhooks_write`) are not offered — they need a publicly
-reachable callback and are not useful from an editor. Add only if asked by name.
+- `spark:mcp`
+- `spark:messages_read`
+- `spark:messages_write`
+- `spark:rooms_read`
+- `spark:rooms_write`
+- `spark:memberships_read`
+- `spark:memberships_write`
+- `spark:webhooks_read`
+- `spark:webhooks_write`
 
-If the user picks both `Read and post messages` and `Read messages only`, treat read-only as the narrower
-intent and confirm which they meant.
+#### Meetings (all required)
 
-#### Meetings
+Confirm against the server's metadata at sign-up time, since the set can change. Request the full advertised
+`required_scopes`; a narrowed subset will fail with `invalid_scope`.
 
-Offer these three options as a multi-select, preselecting *Read meetings and transcripts*:
+Say this to the user, briefly:
 
-| Option label | Description to show | Scopes granted |
-| --- | --- | --- |
-| `Read meetings and transcripts` | List and search meetings, see details and live participants, and read transcripts and recordings. | `meeting:schedules_read` `meeting:participants_read` `meeting:transcripts_read` `meeting:recordings_read` |
-| `AI summaries and action items` | Read AI-generated summary notes and action items for ended meetings. | `meeting:summaries_read` |
-| `Create, change and cancel meetings` | Schedule, reschedule and cancel meetings, and manage invitees. | `meeting:schedules_write` |
-
-Say briefly:
-
-- **`Create, change and cancel meetings` sends real email** to invitees, and cancelling emails them too. It
-  is the most consequential grant in this wizard.
-- **`AI summaries and action items` needs Webex AI Assistant** enabled for the organization; a 403 there is an
-  entitlement problem, not a scope one.
+- **You are granting the full set, not a subset** — OpenCode forces it. Posting, editing, space creation and
+  deletion, membership changes and webhook management all become callable.
+- **The guard plugin is the safety net.** It blocks HTML-escaped mentions and mis-threaded replies, bounds
+  unbounded space searches, and appends the AI disclaimer. It cannot, however, prevent a deliberately invoked
+  destructive tool — so treat `webex-delete-space`, `webex-remove-membership` and the like with care.
+- If the user is uncomfortable granting the full set, the honest answer is that Webex MCP **cannot** be
+  connected in this OpenCode version with a narrower grant. Note it and stop rather than pretending otherwise.
 
 #### Then
 
-Assemble the scopes, keeping two forms:
+Keep the full required scope string per server for Step 6 (`oauth.scope`), each starting with `spark:mcp`.
+Even though OpenCode derives the actual request from the server metadata, setting `oauth.scope` to the full
+set keeps the config honest and self-documenting. Show the user the per-server bullet list once, and say this
+is exactly what will be requested at sign-in and must all be ticked on the Integration.
 
-- **For the user:** a bullet list, one scope per line, grouped under its server — the list they tick on the
-  Webex site.
-- **For the configuration:** a space-separated string per server, each starting with `spark:mcp`, which both
-  servers require. That is the value of `oauth.scope` in Step 6. Never show the user this form.
-
-Also keep the union across servers for Step 5. Show the per-server bullet lists once, and say this is what
-will be requested at sign-in.
 
 ### Step 3: AI disclaimer?
 
-**Skip entirely if Step 2 granted no write scope.**
+On OpenCode the Messaging server always includes write scopes (Step 2 forces the full set), so posting is
+always possible — offer the disclaimer whenever Messaging was chosen. Skip this step only if the user chose
+Meetings alone.
 
 Explain that outgoing messages can carry an automatic note saying they were AI-generated, appended in italics
 on its own line by the guard plugin so it cannot be forgotten. Offer three options, defaulting to the first:
@@ -168,27 +169,32 @@ finally: s.close()' 35621
 - **Taken** → say what holds it, test a nearby port, ask the user to confirm or name their own, and re-run the
   check on whatever they choose.
 
-OpenCode picks its own loopback callback for the OAuth flow, but registering the redirect URIs below covers
-the ports/hosts it may use. Ports below 1024 need admin rights and will not work.
+**Pin the callback in OpenCode.** By default OpenCode uses a *random* loopback port and the redirect path
+`/mcp/oauth/callback` — a random port cannot be pre-registered on Webex, so sign-in fails with
+`redirect_uri_mismatch`. Fix this in Step 6 by setting **both** `oauth.callbackPort` and `oauth.redirectUri`
+on each server so the redirect URI is stable and matches what gets registered. The redirect URI OpenCode uses
+is `http://127.0.0.1:<PORT>/mcp/oauth/callback` — note the path is `/mcp/oauth/callback`, **not** `/callback`.
+Ports below 1024 need admin rights and will not work.
 
 ### Step 5: Register the Integration on the Webex site
 
 This step needs a human signed in to Webex. **One Integration covers every server chosen**, so it happens
-once. Give them the union of scopes as a bullet list.
+once. Give them the full required scope set (the union across chosen servers) as a bullet list — every scope
+must be ticked, since OpenCode requests the full `required_scopes` set (Step 2).
 
 > Go to **[developer.webex.com/my-apps](https://developer.webex.com/my-apps) → Create a New App → Integration**
 >
-> - **Redirect URIs:** add **both**
->   - `http://localhost:<PORT>/callback`
->   - `http://127.0.0.1:<PORT>/callback`
-> - **Scopes:** tick exactly these
->   - `spark:mcp`
->   - `<one scope per line, the union from Step 2>`
+> - **Redirect URIs:** add **both** (note the path is `/mcp/oauth/callback`, not `/callback`)
+>   - `http://127.0.0.1:<PORT>/mcp/oauth/callback`
+>   - `http://localhost:<PORT>/mcp/oauth/callback`
+> - **Scopes:** tick **all** of these (the full required set for the chosen server(s))
+>   - `<one scope per line, the full required set from Step 2>`
 >
 > Then copy **both** the **Client ID** and the **Client Secret**, and paste the Client ID back here.
 
-Add both redirect URIs because Webex matches them as exact strings and the loopback host can be either
-`localhost` or `127.0.0.1`. Registering both costs nothing and removes a guess that fails at the redirect.
+Add both redirect URIs because Webex matches them as exact strings and OpenCode's loopback host can be either
+`127.0.0.1` (current default) or `localhost`. The path is always `/mcp/oauth/callback`. Registering both hosts
+costs nothing and removes a guess that fails at the redirect with `redirect_uri_mismatch`.
 
 **The Client Secret is required.** Webex Integrations are confidential clients: the token endpoint rejects the
 exchange without `client_secret`, even with PKCE. The **client ID is not sensitive** and is fine in the
@@ -198,10 +204,13 @@ it through an environment variable instead.
 ### Step 6: Add the servers to opencode.json
 
 **This is the OpenCode-specific step.** Add one `mcp` entry per server chosen. Use the global config
-(`~/.config/opencode/opencode.json`) so Webex is available in every project, unless the user wants it limited
-to one repo (then use the project `opencode.json`).
+(`~/.config/opencode/opencode.json` or `.jsonc`) so Webex is available in every project, unless the user wants
+it limited to one repo (then use the project `opencode.json`).
 
-Keep the client secret out of the file with `{env:WEBEX_CLIENT_SECRET}`. Example with both servers:
+Each server's `oauth` block **must** set `clientId`, `scope`, `callbackPort` and `redirectUri`. The last two
+are not optional here: without them OpenCode picks a random callback port each run, which cannot be
+pre-registered on Webex and fails with `redirect_uri_mismatch`. Keep the client secret out of the file with
+`{env:WEBEX_CLIENT_SECRET}`. Example with both servers, `<PORT>` being the one settled in Step 4:
 
 ```jsonc
 {
@@ -213,7 +222,10 @@ Keep the client secret out of the file with `{env:WEBEX_CLIENT_SECRET}`. Example
       "enabled": true,
       "oauth": {
         "clientId": "<CLIENT_ID>",
-        "scope": "<MESSAGING SCOPE STRING>"
+        "clientSecret": "{env:WEBEX_CLIENT_SECRET}",
+        "scope": "<FULL MESSAGING SCOPE STRING>",
+        "callbackPort": 35621,
+        "redirectUri": "http://127.0.0.1:35621/mcp/oauth/callback"
       }
     },
     "webex-meeting": {
@@ -222,7 +234,10 @@ Keep the client secret out of the file with `{env:WEBEX_CLIENT_SECRET}`. Example
       "enabled": true,
       "oauth": {
         "clientId": "<CLIENT_ID>",
-        "scope": "<MEETINGS SCOPE STRING>"
+        "clientSecret": "{env:WEBEX_CLIENT_SECRET}",
+        "scope": "<FULL MEETINGS SCOPE STRING>",
+        "callbackPort": 35621,
+        "redirectUri": "http://127.0.0.1:35621/mcp/oauth/callback"
       }
     }
   }
@@ -231,16 +246,23 @@ Keep the client secret out of the file with `{env:WEBEX_CLIENT_SECRET}`. Example
 
 Notes:
 
-- `scope` is the space-separated form from Step 2, each starting with `spark:mcp`. Not the bullet list.
-- **The client secret:** OpenCode reads `oauth.clientSecret`, and it supports `{env:VAR}` interpolation. Add
-  `"clientSecret": "{env:WEBEX_CLIENT_SECRET}"` to each `oauth` block and have the user export
-  `WEBEX_CLIENT_SECRET` in their shell profile (`~/.zshrc`, `~/.bashrc`, or their OS keychain-backed env).
-  This keeps the real secret out of the config file. If they would rather not set an env var, they can paste
-  the literal secret as `clientSecret`, but tell them plainly that it then lives in the file in plaintext.
+- **`callbackPort` and `redirectUri` are mandatory.** Set `redirectUri` to
+  `http://127.0.0.1:<PORT>/mcp/oauth/callback` (path fixed, host `127.0.0.1`), and `callbackPort` to the same
+  `<PORT>`. This is the exact string that must be registered on the Integration in Step 5.
+- **`scope` is the full required set**, each starting with `spark:mcp`. OpenCode derives the actual OAuth
+  request from the server's `required_scopes` metadata regardless, so a narrowed value here will not reduce
+  what is requested — set it to the full set to keep the config honest and avoid confusion.
+- **The client secret:** OpenCode reads `oauth.clientSecret` and supports `{env:VAR}` interpolation. Use
+  `"clientSecret": "{env:WEBEX_CLIENT_SECRET}"` and have the user export `WEBEX_CLIENT_SECRET` in their shell
+  profile (`~/.zshrc`, `~/.zprofile`, `~/.bashrc`) or OS keychain-backed env. If they would rather not, they
+  can paste the literal secret as `clientSecret`, but tell them plainly it then lives in the file in plaintext.
+- Two servers can share one `<PORT>`: the callback listener runs only briefly during each sign-in, and sign-ins
+  happen one at a time.
 - Only include the servers they actually chose. Omit the block for a server they skipped.
 - Merge into any existing `mcp` object rather than overwriting the file. Read the current config first.
 
 If the user granted a disclaimer in Step 3, write it where the guard plugin reads it (Step 6b).
+
 
 Show the user the edited `opencode.json` snippet so a silent write failure cannot pass for success.
 
@@ -276,12 +298,17 @@ Each opens the browser for consent (once per server, as the token is per server)
 
 **Before the user clicks**, if you can read the authorization URL, check:
 
-- `redirect_uri` host/port is one of the two registered in Step 5.
-- `scope` matches **that server's** Step 2 string, with nothing extra. A Meetings URL carrying
-  `spark:messages_*`, or a Messaging URL carrying `meeting:*`, means the wrong scope string went into the
-  wrong `mcp` entry.
+- `redirect_uri` is exactly one you registered — `http://127.0.0.1:<PORT>/mcp/oauth/callback` (path
+  `/mcp/oauth/callback`, not `/callback`). If the port differs from what you registered, `oauth.callbackPort` /
+  `oauth.redirectUri` are not set in config; fix Step 6 and re-auth.
+- `scope` lists the server's full `required_scopes` set (OpenCode uses that, not a narrowed `oauth.scope`).
+  Confirm every scope in the URL is ticked on the Integration — a missing one produces `invalid_scope`. A
+  Meetings URL should carry only `meeting:*` (plus `spark:mcp`); a Messaging URL only `spark:*`. Mismatched
+  families mean the wrong server URL is in the wrong `mcp` entry.
 
-If either is wrong, stop and fix it (add the redirect URI, or correct `oauth.scope` and re-auth).
+If either is wrong, stop and fix it (add the redirect URI or the missing scopes to the Integration, or correct
+the `mcp` entry, then re-auth). Editing `oauth.scope` will not change what is requested — the fix for
+`invalid_scope` is always on the Integration side.
 
 **Verify with a read-only call**, do not trust a closed browser tab. Pick one covered by the granted scopes:
 
@@ -310,8 +337,8 @@ sentences, not a menu. Only include a prompt if every scope it needs was granted
 | Meetings write | "Schedule a 30-minute follow-up with *N* on Thursday afternoon." |
 | Both servers | "Summarise this morning's *X* meeting and post the action items to the *X* space." |
 
-Substitute real names you saw during Step 7. Then two short lines: edit `opencode.json` and re-auth to change
-capabilities or the port, and, only if a disclaimer was set, that it lives in
+Substitute real names you saw during Step 7. Then two short lines: edit the `oauth` block in `opencode.json`
+and re-auth to change the port or client, and, only if a disclaimer was set, that it lives in
 `~/.config/opencode/webex-mcp/disclaimer.txt` and can be edited or deleted.
 
 ---
@@ -340,18 +367,24 @@ Integrations are confidential clients — PKCE does not exempt them. Regenerate 
 developer.webex.com/my-apps if lost.
 
 ### `invalid_scope`
-The requested scopes are not all present on the Integration. Compare the `scope` in the authorization URL
-against the scope list at developer.webex.com/my-apps and fix whichever is wrong. Edit `oauth.scope` in
-`opencode.json`, restart, and re-auth — the config is read at registration.
+OpenCode requests the server's full `required_scopes` set, and one or more of them is not enabled on the
+Integration. Compare the `scope` parameter in the authorization URL against the scope list at
+developer.webex.com/my-apps and tick every one that is missing. On OpenCode you cannot avoid this by narrowing
+`oauth.scope` — the server metadata forces the full set (see Step 2). Editing `oauth.scope` does not change the
+requested set; the fix is always to add the missing scopes to the Integration, then re-auth.
 
 ### The redirect fails, or the browser cannot connect
-Three things must agree: the Redirect URI on the Integration, the host in the authorization URL (read it, do
-not assume — `127.0.0.1` vs `localhost`), and the port. Register both hosts in Step 5 to cover this.
+Three things must agree, exactly: the Redirect URI on the Integration, the host+path in the authorization URL
+(read it — OpenCode uses `http://127.0.0.1:<PORT>/mcp/oauth/callback`, path `/mcp/oauth/callback`, not
+`/callback`), and the port. If the URL shows a *different* port than you registered, `oauth.callbackPort` /
+`oauth.redirectUri` are not set — add them (Step 6) so the port is stable, then register that exact URI.
+Register both `127.0.0.1` and `localhost` hosts to cover either form.
 
 ### 403 or `insufficient_scope` from a tool
-That tool needs a capability outside the granted set — the narrow grant working, not a broken setup. To widen:
-add the scope to the Integration at developer.webex.com/my-apps, then update `oauth.scope` in `opencode.json`,
-restart, and re-auth.
+On OpenCode the full scope set is always granted, so a 403 here is usually an **entitlement** problem (e.g. the
+org has not enabled a feature, or `meeting:summaries_read` needs Webex AI Assistant), not a missing scope. If a
+scope genuinely is missing, add it to the Integration and re-auth. The guard plugin does not cause 403s — it
+only rewrites or refuses specific message calls.
 
 ### Message bodies come back empty
 Add `spark:kms` to the Integration and to `oauth.scope`, then restart and re-auth. Webex uses it for
@@ -372,6 +405,13 @@ delete it to stop appending. No restart is needed — the guard plugin reads it 
 
 ## Limitations
 
+- **OpenCode cannot narrow scopes for these servers.** The Webex MCP servers advertise their full scope set as
+  `required_scopes`, and OpenCode requests exactly that regardless of `oauth.scope`. So the per-capability
+  grant that Claude Code offers is not possible here — you grant the full set or you do not connect. The guard
+  plugin, not scope narrowing, is what limits the dangerous calls.
+- **The OAuth callback must be pinned.** OpenCode defaults to a random loopback port and the path
+  `/mcp/oauth/callback`. A random port cannot be pre-registered on Webex, so `oauth.callbackPort` and
+  `oauth.redirectUri` are effectively required.
 - **Creating the Webex Integration cannot be automated.** It needs a human signed in to Webex.
 - **Control Hub enablement is out of reach.** If an admin has not enabled MCP access, sign-in can succeed while
   every call is refused.

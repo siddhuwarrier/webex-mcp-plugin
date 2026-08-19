@@ -1,16 +1,17 @@
 ---
 name: webex-setup
 description: |
-  Guide a user through connecting Cisco's hosted Webex MCP servers to OpenCode end to end — choose which
-  servers and which capabilities to grant, settle a callback port, register a Webex Integration, add the
-  servers to opencode.json, authenticate, and verify. Also the troubleshooter for a connection that fails or
-  a tool that returns 403.
-  TRIGGER when: the user is setting up Webex for the first time in OpenCode, says "set up webex",
-  "connect webex", "get me started with webex"; wants to change which Webex capabilities are granted or the
-  OAuth callback; Webex tools are missing; sign-in fails; or an error mentions invalid_scope, redirect_uri,
-  insufficient_scope, or a 403 from a Webex tool.
-  SKIP when: Webex is already connected and the user just wants to read, search or post messages — call the
-  webex-* tools directly instead.
+  Connect Cisco's hosted Webex MCP servers to OpenCode end to end — pick servers, register a Webex
+  Integration, add the servers to opencode.json, authenticate, and verify. Also troubleshoots a failed
+  connection or a 403 from a Webex tool.
+  TRIGGER when: setting up Webex in OpenCode; "set up webex" / "connect webex"; changing granted Webex
+  capabilities or the OAuth callback; Webex tools are missing; sign-in fails; or an error mentions
+  invalid_scope, redirect_uri, insufficient_scope, or a 403 from a Webex tool.
+  DO NOT TRIGGER when: Webex is already connected and the user just wants to use it (read, search, post, reply,
+  manage spaces/memberships) — call the webex-* tools directly; the user asks about Webex in general, the
+  product, or the REST API rather than connecting the MCP servers; the request is about a different MCP server;
+  the user only wants to change the disclaimer text (edit ~/.config/opencode/webex-mcp/disclaimer.txt); or a
+  403 is clearly an org entitlement problem, not a scope or connection issue.
 metadata:
   host: opencode
 ---

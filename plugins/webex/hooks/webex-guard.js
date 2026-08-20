@@ -48,6 +48,17 @@ function deny(reason) {
   emit({ permissionDecision: 'deny', permissionDecisionReason: reason });
 }
 
+// Emits the WHOLE input with `patch` applied on top, never just the changed keys.
+//
+// The docs describe updatedInput as merged with the original tool_input, but in
+// practice it has been observed replacing it outright — which silently dropped
+// toPersonEmail from a send, and dropped the title filter from a space search
+// while still returning a plausible-looking result. Sending the full object is
+// correct under either behaviour, so do not "optimise" this back to a patch.
+function replaceInput(input, patch) {
+  emit({ updatedInput: { ...input, ...patch } });
+}
+
 function bodyOf(toolInput) {
   return ['markdown', 'text', 'html']
     .map((k) => toolInput[k])
@@ -72,7 +83,7 @@ function main(raw) {
 
   if (name === 'webex-search-spaces') {
     if (input.max === undefined || input.max === null || input.max === '') {
-      emit({ updatedInput: { max: 20 } });
+      replaceInput(input, { max: 20 });
     }
     return;
   }
@@ -139,7 +150,7 @@ function appendDisclaimer(input) {
   if (body.includes(text)) return; // Already present.
 
   const suffix = field === 'markdown' ? `_${text}_` : text;
-  emit({ updatedInput: { [field]: `${body}\n\n${suffix}` } });
+  replaceInput(input, { [field]: `${body}\n\n${suffix}` });
 }
 
 let raw = '';
